@@ -15,6 +15,19 @@ from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 from django.http import Http404
 from cachetools import cached, LRUCache, LFUCache, keys, func
+from functools import wraps
+from time import time
+
+def timing(f):
+    @wraps(f)
+    def wrap(*args, **kw):
+        ts = time()
+        result = f(*args, **kw)
+        te = time()
+        #print('func:%r args:[%r, %r] took: %2.4f sec' %  (f.__name__, args, kw, te-ts))
+        print('func:{} took: {} sec'.format(f.__name__, te-ts))
+        return result
+    return wrap
 
 watchlist_cache = LRUCache(maxsize=1024)
 
@@ -328,7 +341,7 @@ class Watchlist(model.Model):
 def find_user(username: str):
     return get_user_model().objects.filter(username=username).first()
 
-def hash_watchlist_key(username, asx_code, **kwargs):
+def hash_watchlist_key(username, asx_code, **kwargs): # pylint: disable=unused-argument
     return keys.hashkey(username, asx_code)
 
 @cached(watchlist_cache, key=hash_watchlist_key)
@@ -383,15 +396,20 @@ def all_available_dates(reference_stock="ANZ"):
     ret = sorted(dates, key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
     return ret
 
-def stock_info(stock, warning_cb=None):
+def stock_info(stock: str, warning_cb=None) -> dict:
     assert len(stock) > 0
     securities = Security.objects.filter(asx_code=stock)
-    if securities is None:
+    if securities is None and warning_cb:
         warning_cb(f"No securities available for {stock}")
     company_details = CompanyDetails.objects.filter(asx_code=stock).first()
-    if company_details is None and warning_cb:
-        warning_cb(f"No details available for {stock}")
-    return securities, company_details
+    if company_details is None:
+        if warning_cb:
+            warning_cb(f"No details available for {stock}")
+        result = {}
+    else:
+        result = model_to_dict(company_details)
+    result['securities'] = securities
+    return result
 
 @func.lru_cache(maxsize=1)
 def stocks_by_sector() -> pd.DataFrame:
@@ -403,7 +421,7 @@ def stocks_by_sector() -> pd.DataFrame:
     ]
     df = pd.DataFrame.from_records(rows)
     assert len(df) > 0
-    colnames = df.columns
+    colnames = set(df.columns)
     assert "asx_code" in colnames and "sector_name" in colnames
     return df
 
@@ -423,7 +441,7 @@ class Sector(model.Model):
         db_table = "sector"
 
 @func.lru_cache(maxsize=1)
-def all_sectors():
+def all_sectors() -> list:
     iterable = list(CompanyDetails.objects.order_by().values_list('sector_name', flat=True).distinct())
     #print(iterable)
     results = [
@@ -431,17 +449,24 @@ def all_sectors():
     ]  # as tuples since we want to use it in django form choice field
     return results
 
-@func.lru_cache(maxsize=16)
-def all_sector_stocks(sector_name):
+def companies_with_same_sector(stock: str) -> set:
     """
-    Return a set of unique ASX stock codes for every security designated as part of the specified sector
+    Return the set of all known companies designated with the same sector as the specified stock
+    """
+    cd = CompanyDetails.objects.filter(asx_code=stock).first()
+    if cd is None:
+        return set()
+    return all_sector_stocks(cd.sector_name)
+
+@func.lru_cache(maxsize=16)
+def all_sector_stocks(sector_name: str) -> set: 
+    """
+    Return a set of ASX stock codes for every security designated as part of the specified sector
     """
     assert sector_name is not None and len(sector_name) > 0
-    stocks = set(
-        CompanyDetails.objects.order_by("asx_code")
-        .filter(sector_name=sector_name)
-        .values_list("asx_code", flat=True)
-    )
+    ss = stocks_by_sector()
+    ss = ss[ss["sector_name"] == sector_name]
+    stocks = set(ss["asx_code"])
     return stocks
 
 @func.lfu_cache(maxsize=2) # cache today's data only to save memory 
@@ -493,8 +518,8 @@ def all_stocks(strict=True):
         for security in Security.objects.all():
             name = security.security_name.lower()
             if 'etf' in name or 'ordinary' in name:
-               #print(name)
-               all_securities.append(security.asx_code)
+                #print(name)
+                all_securities.append(security.asx_code)
     else:
         all_securities = Security.objects.values_list("asx_code", flat=True)
    
@@ -590,13 +615,14 @@ def get_parquet(tag: str) -> pd.DataFrame:
         return cache_entry.dataframe
     return None
 
-def selected_cached_stocks_cip(stocks, timeframe: Timeframe):
+def selected_cached_stocks_cip(stocks, timeframe: Timeframe) -> pd.DataFrame:
     n = len(stocks)
     assert n > 0
     all_cip = cached_all_stocks_cip(timeframe)
     result_df = all_cip.filter(items=stocks, axis=0)
-    print("Selected stocks cip: found {} stocks (ie. rows)".format(len(result_df)))
-    assert len(result_df) <= n
+    got = len(result_df)
+    print("Selected stocks cip: found {} stocks (ie. rows)".format(got))
+    assert got <= n
     return result_df
 
 @func.lfu_cache(maxsize=4)
@@ -644,7 +670,7 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     if debug:
         print(f"{tag} loaded from DB/parquet cache")
         assert isinstance(parquet_blob, bytes)
-        print(f"get_dataframe: {tag}")
+        print(f"Parsing parquet for {tag}")
 
     with io.BytesIO(parquet_blob) as fp:
         df = pd.read_parquet(fp)
@@ -656,12 +682,7 @@ def make_superdf(required_tags, stock_codes):
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
     dataframes = filter(lambda df: df is not None,
                         [get_dataframe(tag, stock_codes) for tag in required_tags])
-    superdf = None
-    for df in dataframes:
-        if superdf is None:
-            superdf = df
-        else:
-            superdf = superdf.append(df)
+    superdf = pd.concat(dataframes, axis=0)
     return superdf
 
 
@@ -777,6 +798,7 @@ def rsi_data(stock: str, timeframe: Timeframe):
     #print(stock_df)
     return stock_df
 
+@timing
 def company_prices(
         stock_codes,
         timeframe: Timeframe,

@@ -6,23 +6,23 @@
         <h3 class="mt-4">{{ overall_title }}</h3>
 
         <div class="overall-figure">
-        {% if portfolio_figure is None %}
+        {% if performance_uri is None %}
         {% else %}
             <p>Displays the overall performance of the current watchlist virtual purchases
                from the date purchased to the current date. No transaction fees are shown.
             </p>
             <img class="portfolio-overall-figure"
-                 src="data:image/png; base64, {{ portfolio_figure }}"
+                 src="/png/{{ performance_uri }}"
                  alt="Portfolio virtual performance" />
         {% endif %}
         </div>
 
-        {% if profit_contributors is None %}
+        {% if contributors_uri is None %}
         {% else %}
         <h3 class="profit-contributions mt-4">Profit/Loss contributors</h3>
 
         <div class="contributors-figure">
-            <img src="data:image/png; base64, {{ profit_contributors }}"
+            <img src="/png/{{ contributors_uri }}"
                alt="Profit contributors" />
         </div>
         {% endif %}
@@ -30,13 +30,13 @@
         <h3 class="mt-4">{{ stock_title }}</h3>
 
         <div class="stock-figure">
-        {% if stock_figure is None %}
+        {% if stock_performance_uri is None %}
         {% else %}
             <p>Displays each stock which has been virtually purchased and it's
                contribution towards profit/loss of the overall portfolio.
             </p>
             <img class="stock-figure"
-                 src="data:image/png; base64, {{ stock_figure }}"
+                 src="/png/{{ stock_performance_uri }}"
                  alt="Stock virtual performance" />
         {% endif %}
         </div>

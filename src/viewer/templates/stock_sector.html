@@ -1,47 +1,54 @@
-{% extends "stock_page.html" %}
-
-{% block stock_page %}
-     {% if company_versus_sector_plot is None %}
+<div class="mt-4">
+     {% if data.company_versus_sector is None %}
      {% else %}
-     <h3 class="mt-4">{{ company_versus_sector_title }}</h3>
+          <h3>{{ data.company_versus_sector.title }}</h3>
 
-     <img class="company_versus_sector"
-          src="data:image/png;base64, {{ company_versus_sector_plot }}"
-          alt="{{ company_versus_sector_title }}" />
+          <ul>
+               <li>Timeframe: {{ data.timeframe.description }}</li>
+          </ul>
+
+          <img class="company_versus_sector"
+               src="data:image/png;base64, {{ data.company_versus_sector.plot }}"
+               alt="{{ data.company_versus_sector.title }}" />
      {% endif %}
-    
-     {% if point_score_plot is None %}
+</div>
+
+<div class="mt-4">
+     {% if data.point_score is None %}
      {% else %}
-     <h3 class="mt-4">{{ point_score_plot_title }}</h3>
-     <p>Visualise the stock using a points system: based on daily change price (percentage). Points are awarded by:</p>
-     <ul>
-     <li>+1 if it goes up on a given day</li>
-     <li>+2 if it beats the market average on a given day</li>
-     <li>+3 if it beats the sector average on a given day</li>
-     <li>+1 if it goes up more than 2% on a given day</li>
-     <li>+1 if it goes up despite a down market (and sector) day</li>
-     <li>+1 if the stock ends the day within 20% of the top of the daily trading price range</li>
-     </ul>
-     <p>This may yield easier identification of stocks which are outperforming or solid performers over time.
-     Symettry applies: points are deducted for moves in the downward direction.
-     </p>
+          <h3>{{ data.point_score.title }}</h3>
 
-     <div class="mt-4">
-          <img class="point_score_plot"
-               src="data:image/png;base64, {{ point_score_plot }}"
-               alt="{{ point_score_plot_title }}" />
-          <img class="net_contributors_plot"
-               src="data:image/png;base64, {{ net_contributors_plot }}"
-               alt="{{ net_contributors_plot_title }}" />
-          {% endif %}
-     </div>
+          <p>Visualise the stock using a points system: based on daily change price (percentage). Points are awarded by:</p>
 
-     {% if sector_momentum_plot is None %}
-     {% else %}
-     <h3 class="mt-4">{{ sector_momentum_title }}</h3>
+          <ul>
+          <li>+1 if it goes up on a given day</li>
+          <li>+2 if it beats the market average on a given day</li>
+          <li>+3 if it beats the sector average on a given day</li>
+          <li>+1 if it goes up more than 2% on a given day</li>
+          <li>+1 if it goes up despite a down market (and sector) day</li>
+          <li>+1 if the stock ends the day within 20% of the top of the daily trading price range</li>
+          </ul>
 
-     <img class="sector_past3months"
-          src="data:image/png;base64, {{ sector_momentum_plot }}"
-          alt="{{ sector_momentum_title }}" />
+          <p>This may yield easier identification of stocks which are outperforming or solid performers over time.
+          Symettry applies: points are deducted for moves in the downward direction.
+          </p>
+
+          <div class="mt-4">
+               <img class="point_score_plot"
+                    src="data:image/png;base64, {{ data.point_score.plot }}"
+                    alt="{{ data.point_score.title }}" />
+               <img class="net_contributors_plot"
+                    src="data:image/png;base64, {{ data.net_contributors.plot }}"
+                    alt="{{ data.net_contributors.title }}" />
+          </div>
      {% endif %}
-{% endblock %}
+
+     {% if data.sector_momentum is None %}
+     {% else %}
+          <h3>{{ data.sector_momentum.title }}</h3>
+
+          <img class="sector_momentum_plot"
+               src="data:image/png;base64, {{ data.sector_momentum.plot }}"
+               alt="{{ data.sector_momentum.title }}" />
+     {% endif %}
+</div>

@@ -1,10 +1,9 @@
-{% extends "stock_page.html" %}
 
-{% block stock_page %}
-     <h3 class="mt-4">Fundamentals for {{ asx_code }}</h3>
+<div class="mt-4">
+     <h3>Fundamentals for {{ asx_code }}</h3>
 
      <img class="stock"
-          src="data:image/png;base64, {{ fundamentals_plot }}"
+          src="data:image/png;base64, {{ data.plot }}"
           alt="Fundamentals plot for ASX.{{ asx_code }}" />
 
      <ul>
@@ -14,4 +13,4 @@
           <li>EPS expressed in $AUD</li>
           <li>ETFs do not currently have annual_dividend_yield, market_cap and number_of_shares data due to lack of available data</li>
      </ul>
-{% endblock %}
+</div>

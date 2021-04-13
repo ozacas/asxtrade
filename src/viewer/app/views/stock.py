@@ -3,55 +3,74 @@ Responsible for providing detiled views about a single stock and closely related
 """
 from collections import defaultdict
 from datetime import datetime
+from cachetools import LFUCache
 import pandas as pd
 import numpy as np
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
-from app.models import (validate_stock, validate_user, stock_info, cached_all_stocks_cip, 
+from app.models import (validate_stock, validate_user, stock_info, cached_all_stocks_cip, companies_with_same_sector,
                         Timeframe, company_prices, rsi_data, user_watchlist, selected_cached_stocks_cip, 
-                        validate_date, user_purchases, all_available_dates)
-from app.analysis import analyse_sector_performance, default_point_score_rules, rank_cumulative_change, calculate_trends
+                        validate_date, user_purchases, all_available_dates, timing)
+from app.analysis import (default_point_score_rules, rank_cumulative_change, 
+                        calculate_trends, make_sector_performance_dataframe, make_stock_vs_sector_dataframe)
 from app.messages import warning
-from app.plots import plot_point_scores, plot_fundamentals, make_rsi_plot, plot_trend, plot_company_rank, plot_portfolio
+from app.plots import (plot_point_scores, plot_fundamentals, make_rsi_plot, plot_trend, 
+                        cached_portfolio_performance, cached_company_rank, plot_sector_performance, plot_company_versus_sector)
 
-@login_required
-def show_stock_sector(request, stock):
-    validate_stock(stock)
-    validate_user(request.user)
+image_cache = LFUCache(maxsize=10)
 
-    _, company_details = stock_info(stock, lambda msg: warning(request, msg))
-    sector = company_details.sector_name if company_details else None
-    all_stocks_cip = cached_all_stocks_cip(Timeframe(past_n_days=180))
+@timing
+def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
+    cip = cached_all_stocks_cip(timeframe)
+    sector_companies = companies_with_same_sector(stock)
+    sector = stock_info(stock).get('sector_name', '')
+
+    # implement caching (in memory) at image level to avoid all data manipulation if at all possible
+    tag = "sector-momentum-plot-{}-{}".format(sector, timeframe.description)
+    if tag in image_cache:
+        sector_momentum_plot = image_cache[tag]
+    else:
+        df = make_sector_performance_dataframe(cip, sector_companies)
+        sector_momentum_plot = plot_sector_performance(df, sector, window_size=14) if df is not None else None
+        image_cache[tag] = sector_momentum_plot
+    tag = "c_vs_s_plot-{}-{}".format(stock, timeframe.description)
+    if tag in image_cache:
+        c_vs_s_plot = image_cache[tag]
+    else:
+        df = make_stock_vs_sector_dataframe(cip, stock, sector_companies)
+        c_vs_s_plot = plot_company_versus_sector(df, stock, sector) if df is not None else None
+        image_cache[tag] = c_vs_s_plot
 
     # invoke separate function to cache the calls when we can
-    c_vs_s_plot, sector_momentum_plot, sector_companies = analyse_sector_performance(stock, sector, all_stocks_cip)
     point_score_plot = net_rule_contributors_plot = None
-    if sector_companies is not None:
+    if len(sector_companies) > 0:
         point_score_plot, net_rule_contributors_plot = \
                 plot_point_scores(stock,
                                   sector_companies,
-                                  all_stocks_cip,
+                                  cip,
                                   default_point_score_rules())
-                        
-    context = {
-        "is_sector": True,
-        "asx_code": stock,
-        "sector_momentum_plot": sector_momentum_plot,
-        "sector_momentum_title": "{} sector stocks".format(sector),
-        "company_versus_sector_plot": c_vs_s_plot,
-        "company_versus_sector_title": "{} vs. {} performance".format(stock, sector),
-        "point_score_plot": point_score_plot,
-        "point_score_plot_title": "Points score due to price movements",
-        "net_contributors_plot": net_rule_contributors_plot,
-        "net_contributors_plot_title": "Contributions to point score by rule",
+    return {  
+        "timeframe": timeframe,
+        "sector_momentum": {
+            "plot": sector_momentum_plot,
+            "title": "{} sector stocks".format(sector),
+        },
+        "company_versus_sector": {
+            "plot": c_vs_s_plot,
+            "title": "Performance against sector",
+        },
+        "point_score": {
+            "plot": point_score_plot,
+            "title": "Points score due to price movements",
+        },
+        "net_contributors": {
+            "plot": net_rule_contributors_plot,
+            "title": "Contributions to point score by rule",
+        }
     }
-    return render(request, "stock_sector.html", context)
 
-@login_required
-def show_fundamentals(request, stock=None, n_days=2 * 365):
-    validate_user(request.user)
-    validate_stock(stock)
-    timeframe = Timeframe(past_n_days=n_days)
+@timing
+def make_fundamentals(timeframe: Timeframe, stock: str):
     df = company_prices(
         [stock],
         timeframe,
@@ -63,68 +82,70 @@ def show_fundamentals(request, stock=None, n_days=2 * 365):
     #print(df)
     df['change_in_percent_cumulative'] = df['change_in_percent'].cumsum() # nicer to display cumulative
     df = df.drop('change_in_percent', axis=1)
-    fundamentals_plot = plot_fundamentals(df, stock)
-    context = {
-        "asx_code": stock,
-        "is_fundamentals": True,
-        "fundamentals_plot": fundamentals_plot
+    return {
+        "plot": plot_fundamentals(df, stock),
+        "title": "Stock fundamentals: EPS, PE, DY etc.",
+        "timeframe": timeframe,
     }
-    return render(request, "stock_fundamentals.html", context)
 
 @login_required
 def show_stock(request, stock=None, n_days=2 * 365):
     """
-    Displays a view of a single stock via the stock_view.html template and associated state
+    Displays a view of a single stock via the template and associated state
     """
     validate_stock(stock)
     validate_user(request.user)
 
     timeframe = Timeframe(past_n_days=n_days+200) # add 200 days so MA 200 can initialise itself before the plotting starts...
+    plot_timeframe = Timeframe(past_n_days=n_days) # for template
     stock_df = rsi_data(stock, timeframe) # may raise 404 if too little data available
-    securities, company_details = stock_info(stock, lambda msg: warning(request, msg))
-
+    company_details = stock_info(stock, lambda msg: warning(request, msg))
     momentum_plot = make_rsi_plot(stock, stock_df)
 
     # plot the price over timeframe in monthly blocks
     prices = stock_df[['last_price']].transpose() # use list of columns to ensure pd.DataFrame not pd.Series
-    #print(prices)
+    prices = prices.filter(items=plot_timeframe.all_dates(), axis='columns') # drop any date in "warm up" period
     monthly_maximum_plot = plot_trend(prices, sample_period='M')
 
     # populate template and render HTML page with context
     context = {
         "asx_code": stock,
-        "securities": securities,
-        "cd": company_details,
-        "rsi_plot": momentum_plot,
-        "is_momentum": True,
-        "monthly_highest_price_plot_title": "Maximum price each month trend",
-        "monthly_highest_price_plot": monthly_maximum_plot,
-        "timeframe": f"{n_days} days",
         "watched": user_watchlist(request.user),
+        "timeframe": plot_timeframe,
+        "information": company_details,
+        "momentum": {
+           "rsi_plot": momentum_plot,
+           "monthly_highest_price": {
+                "title": "Highest price each month",
+                "plot": monthly_maximum_plot,
+           }
+        },
+        "fundamentals": make_fundamentals(plot_timeframe, stock),
+        "stock_vs_sector": make_stock_sector(plot_timeframe, stock)
     }
-    return render(request, "stock_view.html", context=context)
+    return render(request, "stock_page.html", context=context)
 
 
 @login_required
 def show_trends(request):
     validate_user(request.user)
-    watchlist_stocks = user_watchlist(request.user)
+    stocks = user_watchlist(request.user)
     timeframe = Timeframe(past_n_days=300)
-    cip = selected_cached_stocks_cip(watchlist_stocks, timeframe)
-    trends = calculate_trends(cip, watchlist_stocks)
+    cip = selected_cached_stocks_cip(stocks, timeframe)
+    trends = calculate_trends(cip, stocks)
     #print(trends)
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
-    cip = rank_cumulative_change(
-        cip.filter(trends.keys(), axis="index"), timeframe
-    )
+    cip = rank_cumulative_change(cip.filter(trends.keys(), axis="index"), timeframe)
     #print(cip)
-    trending_companies_plot = plot_company_rank(cip)
+    trending_companies_plot = cached_company_rank(cip, f"{request.user.username}-watchlist-trends")
+
     context = {
         "watchlist_trends": trends,
-        "trending_companies_plot": trending_companies_plot,
-        "trending_companies_plot_title": "Trending watchlist companies by rank: {}".format(timeframe.description),
+        "timeframe": timeframe,
+        "trending_companies_uri": trending_companies_plot,
+        "trending_companies_plot_title": "Trending watchlist stocks (ranked): {}".format(timeframe.description),
     }
-    return render(request, "trends.html", context=context)
+    return render(request, "watchlist-rank.html", context=context)
 
 
 def sum_portfolio(df: pd.DataFrame, date_str: str, stock_items):
@@ -135,6 +156,8 @@ def sum_portfolio(df: pd.DataFrame, date_str: str, stock_items):
 
 @login_required
 def show_purchase_performance(request):
+    validate_user(request.user)
+
     purchase_buy_dates = []
     purchases = []
     stocks = []
@@ -188,14 +211,16 @@ def show_purchase_performance(request):
                 }
             )
 
-    t = plot_portfolio(pd.DataFrame.from_records(rows))
-    portfolio_performance_figure, stock_performance_figure, profit_contributors_figure = t
+    df = pd.DataFrame.from_records(rows)
+    username = request.user.username
+    portfolio_performance_uri, stock_performance_uri, contributors_uri = cached_portfolio_performance(df, username)
+   
     context = {
         "title": "Portfolio performance",
         "portfolio_title": "Overall",
-        "portfolio_figure": portfolio_performance_figure,
+        "performance_uri": portfolio_performance_uri,
         "stock_title": "Stock",
-        "stock_figure": stock_performance_figure,
-        "profit_contributors": profit_contributors_figure,
+        "stock_performance_uri": stock_performance_uri,
+        "contributors_uri": contributors_uri,
     }
     return render(request, "portfolio_trends.html", context=context)

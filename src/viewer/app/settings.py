@@ -143,3 +143,13 @@ INTERNAL_IPS = [ '127.0.0.1', ]
 
 STATIC_URL = '/static/'
 STATIC_ROOT = '/home/acas/src/asxtrade/src/viewer/static'
+
+# caching use pypi diskcache
+CACHE_DIR = '/tmp/cache'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'diskcache.DjangoCache',
+        'LOCATION': CACHE_DIR,
+    },
+}

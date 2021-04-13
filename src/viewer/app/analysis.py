@@ -14,11 +14,10 @@ from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance
 from pypfopt.hierarchical_portfolio import HRPOpt
-from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector, Timeframe, validate_date
+from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector, Timeframe, validate_date, companies_with_same_sector
 from app.plots import (
     plot_sector_performance,
     plot_company_versus_sector,
-    plot_as_base64
 )
 from app.messages import warning
 
@@ -163,6 +162,8 @@ def rule_at_end_of_daily_range(state: dict):
     day_low_high_df = state.get('day_low_high_df')
     date = state.get('date')
     threshold = state.get('daily_range_threshold')
+    if not 'bad_days' in state:
+        state['bad_days'] = 0
     try:
         day_low = day_low_high_df.at[date, 'day_low_price']
         day_high = day_low_high_df.at[date, 'day_high_price']
@@ -177,7 +178,7 @@ def rule_at_end_of_daily_range(state: dict):
         # else FALLTHRU...
     except KeyError:
         stock = state.get('stock')
-        warning(None, "Unable to obtain day low/high and last_price for {} on {}".format(stock, date))
+        state['bad_days'] += 1
     return 0
 
 def default_point_score_rules():
@@ -245,21 +246,44 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     print("Found {} outlier stocks".format(len(results)))
     return results
 
-def analyse_sector(stock, sector: str, sector_companies, all_stocks_cip, window_size=14):
-    assert all_stocks_cip is not None
-    assert sector_companies is not None
-
+def prep_cip_dataframe(cip: pd.DataFrame, sector_companies=None) -> tuple:
+    if sector_companies is None:
+        sector_companies = companies_with_same_sector(stock)    
     if len(sector_companies) == 0:
-        return None, None
+        return None, False
 
-    cip = all_stocks_cip.filter(items=sector_companies, axis='index')
+    cip = cip.filter(items=sector_companies, axis='index')
     cip = cip.fillna(0.0)
-    #assert len(cip) == len(sector_companies) # may fail when some stocks missing due to delisted etc.
-    rows = []
+    return cip, True
+
+def make_stock_vs_sector_dataframe(all_stocks_cip: pd.DataFrame, stock: str, sector_companies=None) -> pd.DataFrame:
+    cip, ok = prep_cip_dataframe(all_stocks_cip, sector_companies)
+    if not ok:
+        return None
+
     cum_sum = defaultdict(float)
     stock_versus_sector = []
     # identify the best performing stock in the sector and add it to the stock_versus_sector rows...
     best_stock_in_sector = cip.sum(axis=1).nlargest(1).index[0]
+    best_group = '{} (#1 in sector)'.format(best_stock_in_sector)
+    for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
+        for asx_code, daily_change in cip[day].iteritems():
+            cum_sum[asx_code] += daily_change
+  
+        stock_versus_sector.append({ 'group': stock, 'date': day, 'value': cum_sum[stock] })
+        stock_versus_sector.append({ 'group': 'sector_average', 'date': day, 'value': pd.Series(cum_sum).mean() })
+        if stock != best_stock_in_sector:
+            stock_versus_sector.append({ 'group': best_group, 'value': cum_sum[best_stock_in_sector], 'date': day})
+    df = pd.DataFrame.from_records(stock_versus_sector)
+    return df
+
+def make_sector_performance_dataframe(all_stocks_cip: pd.DataFrame, sector_companies=None) -> pd.DataFrame:
+    cip, ok = prep_cip_dataframe(all_stocks_cip, sector_companies)
+    if not ok:
+        return None
+
+    rows = []
+    cum_sum = defaultdict(float)
     for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
         for asx_code, daily_change in cip[day].iteritems():
             cum_sum[asx_code] += daily_change
@@ -267,16 +291,9 @@ def analyse_sector(stock, sector: str, sector_companies, all_stocks_cip, window_
         n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
         n_unchanged = len(cip) - n_pos - n_neg
         rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
-        stock_versus_sector.append({ 'group': stock, 'date': day, 'value': cum_sum[stock] })
-        stock_versus_sector.append({ 'group': 'sector_average', 'date': day, 'value': pd.Series(cum_sum).mean() })
-        if stock != best_stock_in_sector:
-            stock_versus_sector.append({ 'group': '{} (best in {})'.format(best_stock_in_sector, sector), 'value': cum_sum[best_stock_in_sector], 'date': day})
+       
     df = pd.DataFrame.from_records(rows)
-
-    sector_momentum_plot = plot_sector_performance(df, sector, window_size=window_size)
-    stock_versus_sector_df = pd.DataFrame.from_records(stock_versus_sector)
-    c_vs_s_plot = plot_company_versus_sector(stock_versus_sector_df, stock, sector)
-    return c_vs_s_plot, sector_momentum_plot
+    return df
 
 def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
     """Remove low weights as not significant contributors to portfolio performance"""
@@ -483,16 +500,3 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
 
     print("*** WARNING: unable to optimise portolio!")
     return (None, None, None, None, messages, title, total_portfolio_value, 0.0, len(latest_prices))
-
-def analyse_sector_performance(stock, sector, all_stocks_cip, window_size=10) -> tuple:
-    assert isinstance(stock, str)
-    assert isinstance(all_stocks_cip, pd.DataFrame)
-
-    if sector is not None:  # not an ETF? ie. sector information available?
-        sector_companies = all_sector_stocks(sector)
-        c_vs_s_plot, sector_momentum_plot = analyse_sector(
-            stock, sector, sector_companies, all_stocks_cip, window_size=window_size
-        )
-        return c_vs_s_plot, sector_momentum_plot, sector_companies
-    else:
-        return (None, None, None)

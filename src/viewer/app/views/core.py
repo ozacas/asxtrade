@@ -4,8 +4,9 @@ Other views are derived from this (both FBV and CBV) so be careful to take sub-v
 """
 from django.db.models.query import QuerySet
 from django.core.paginator import Paginator
+from django.core.cache import cache
 from django.shortcuts import render
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.contrib.auth.decorators import login_required
 from app.models import (
     Timeframe, user_purchases, latest_quote, user_watchlist,
@@ -14,7 +15,23 @@ from app.models import (
     all_etfs, increasing_yield, increasing_eps
 )
 from app.messages import info, warning, add_messages
-from app.plots import plot_heatmap, plot_breakdown
+from app.plots import cached_breakdown, cached_heatmap
+
+@login_required
+def png(request, key):
+    """
+    The cache contains all users of the site. In theory if key is guessed, then users can access each others content. For this reason
+    all content is image only (not data) and the key is always a SHA256 hash with random content making it extremely difficult to guess.
+    As further security PNG images served from the cache can only be accessed with a valid login.
+    """
+    assert request is not None # dont yet require user login for this endpoint, but maybe we should???
+    try:
+        with cache.read(key) as reader:
+            response = HttpResponse(reader.read(), content_type="image/png")
+            response['X-Accel-Redirect'] = reader.name
+            return response
+    except KeyError:
+        raise Http404('No such cached image: {}'.format(key))
 
 def show_companies(
         matching_companies, # may be QuerySet or iterable of stock codes (str)
@@ -66,15 +83,20 @@ def show_companies(
     if len(asx_codes) <= 0:
         warning(request, "No matching companies found.")
     else:
-        df = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
-        sentiment_heatmap_data, top10, bottom10 = plot_heatmap(df, sentiment_timeframe, n_top_bottom=n_top_bottom)
-        sector_breakdown_plot = plot_breakdown(df)
+        cip = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
+         # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
+        sum_by_company = cip.sum(axis=1) 
+        top10 = sum_by_company.nlargest(n_top_bottom)
+        bottom10 = sum_by_company.nsmallest(n_top_bottom)
+
+        sentiment_heatmap_uri = cached_heatmap(asx_codes, sentiment_timeframe)
+        sector_breakdown_uri = cached_breakdown(asx_codes, sentiment_timeframe)
         context.update({
             "best_ten": top10,
             "worst_ten": bottom10,
-            "sentiment_heatmap": sentiment_heatmap_data,
+            "sentiment_heatmap_uri": sentiment_heatmap_uri,
             "sentiment_heatmap_title": "{}: {}".format(context['title'], sentiment_timeframe.description),
-            "sector_breakdown_plot": sector_breakdown_plot,
+            "sector_breakdown_uri": sector_breakdown_uri,
         })
 
     if extra_context:

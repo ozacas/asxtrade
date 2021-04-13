@@ -41,7 +41,7 @@
                 <ul class="nav flex-column">{% menu search %}
                     {% for item in menuitems %}
                       <li class="nav-item">
-                        <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                        <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
                       </li>
                     {% endfor %}
                 </ul>
@@ -49,7 +49,7 @@
                 <ul class="nav flex-column">{%menu stats %}
                     {% for item in menuitems %}
                       <li class="nav-item">
-                        <a class="nav-link" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                        <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
                       </li>
                     {% endfor %}
                 </ul>

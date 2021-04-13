@@ -133,11 +133,11 @@
     </script>
 {% endif %}
 
-{% if sentiment_heatmap is None %}
+{% if sentiment_heatmap_uri is None %}
 {% else %}
     <div class="row mt-4">
         <h3>{{ sentiment_heatmap_title }}</h3>
-        <img src="data:image/png;base64, {{ sentiment_heatmap }}" />
+        <img src="/png/{{ sentiment_heatmap_uri }}" />
     </div>
 {% endif %}
 
@@ -149,7 +149,7 @@
     </div>
     <div class="row mt-4 col-md-auto">
         <table>
-           {% include "stock_series.html" with series=best_ten %}
+           {% include "topNbottomN.html" with series=best_ten %}
         </table>
     </div>
 
@@ -158,7 +158,7 @@
     </div>
     <div class="row mt-4 col-md-auto">
         <table>
-            {% include "stock_series.html" with series=worst_ten %}
+            {% include "topNbottomN.html" with series=worst_ten %}
         </table>
     </div>
 {% endif %}
@@ -169,7 +169,7 @@
         <h3>Breakdown by sector</h3>
     </div>
     <div class="row mt-4">
-        <img src="data:image/png;base64, {{ sector_breakdown_plot }}" />
+        <img src="{{ sector_breakdown_uri }}" />
     </div>
 {% endif %}
 

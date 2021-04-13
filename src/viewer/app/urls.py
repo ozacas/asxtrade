@@ -16,12 +16,13 @@ Including another URLconf
 from django.contrib import admin
 from django.conf import settings
 from django.urls import path, include
-from app.views import *
+from app.views import * # pylint: disable=wildcard-import
 
 urlpatterns = [
     path("accounts/", include("django.contrib.auth.urls")),
     path("admin/", admin.site.urls),
     path("", show_all_stocks),
+    path("png/<str:key>", png),
     path("search/by-sector", sector_search, name='sector-search'),
     path("search/by-yield", dividend_search),
     path("search/by-company", company_search),
@@ -36,9 +37,7 @@ urlpatterns = [
     path("show/watched", show_watched, name="show-watched"),
     path("show/etfs", show_etfs, name="show-etfs"),
     path("show/pe-trends", show_pe_trends, name="show-pe-trends"),
-    path("show/fundamentals/<str:stock>", show_fundamentals),
     path("show/recent_sector_performance", show_recent_sector, name="recent-sector-performance"),
-    path("show/stock_sector/<str:stock>", show_stock_sector),
     path("show/<str:stock>", show_stock, name="show-stock"),
     path(
         "show/outliers/sector/<int:sector_id>/<int:n_days>",
@@ -73,4 +72,6 @@ urlpatterns = [
 
 if settings.DEBUG:
     import debug_toolbar
-    urlpatterns = [path("__debug__/", include(debug_toolbar.urls)),] + urlpatterns
+    urlpatterns = [
+        path("__debug__/", include(debug_toolbar.urls)),
+    ] + urlpatterns

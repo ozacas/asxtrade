@@ -29,7 +29,7 @@
 
     <div class="col-md-auto">
         <table>
-        {% include "stock_series.html" with series=best_ten %}
+        {% include "topNbottomN.html" with series=best_ten %}
         </table>
     </div>
 
@@ -37,7 +37,7 @@
 
     <div class="col-md-auto">
     <table>
-        {% include "stock_series.html" with series=worst_ten %}
+        {% include "topNbottomN.html" with series=worst_ten %}
     </table>
     </div>
 {% endif %}

@@ -3,35 +3,16 @@
 
 {% block content %}
 <div class="row">
-     <div class="col-md-auto">
-
-          {% block stock_page %}
-          {% endblock %}
-
-          <table class="mt-4">
-
-               {% if not is_fundamentals %}
-               <tr>
-                    <td><a href="/show/fundamentals/{{ asx_code }}" class="btn btn-primary">Fundamentals</a></td>
-                    <td>Show PE, EPS, Dividend Yield, Trading Volume over time</td>
-               </tr>
-               {% endif %}
-
-               {% if not is_momentum %}
-               <tr>
-               <td><a href="/show/{{ asx_code }}" class="btn btn-primary">Momentum</a></td>
-               <td>Show momentum and maximum monthly price trend</td>
-               </tr>
-               {% endif %}
-
-               {% if not is_sector %}
-               <tr>
-                    <td><a href="/show/stock_sector/{{ asx_code }}" class="btn btn-primary">Stock versus sector</a></td>
-                    <td>Show how the company performs against the market, sector and breakdown by point scoring rules</td>
-               </tr>
-               {% endif %}
-          </table>
-     </div>
+    {% include 'stock_information.html' with data=information %}
+</div>
+<div class="row">
+    {% include 'stock_momentum.html' with data=momentum %}
+</div>
+<div class="row">
+    {% include 'stock_fundamentals.html' with data=fundamentals %}
+</div>
+<div class="row">
+    {% include 'stock_sector.html' with data=stock_vs_sector %}
 </div>
 
 {% include "user-messages.html" %}
