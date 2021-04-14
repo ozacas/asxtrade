@@ -1,5 +1,5 @@
 <div class="mt-4">
-     {% if data.company_versus_sector is None %}
+     {% if data.company_versus_sector.plot_uri is None %}
      {% else %}
           <h3>{{ data.company_versus_sector.title }}</h3>
 
@@ -14,7 +14,7 @@
 </div>
 
 <div class="mt-4">
-     {% if data.point_score is None %}
+     {% if data.point_score.plot_uri is None %}
      {% else %}
           <h3>{{ data.point_score.title }}</h3>
 
@@ -43,7 +43,7 @@
           </div>
      {% endif %}
 
-     {% if data.sector_momentum is None %}
+     {% if data.sector_momentum.plot_uri is None %}
      {% else %}
           <h3>{{ data.sector_momentum.title }}</h3>
 

@@ -72,7 +72,6 @@ def make_portfolio_dataframe(df: pd.DataFrame, melt=False):
 
 def make_sector_performance_dataframe(all_stocks_cip: pd.DataFrame, sector_companies=None) -> pd.DataFrame:
     cip = prep_cip_dataframe(all_stocks_cip, None, sector_companies)
-    assert cip is not None
     if cip is None:
         return None
 

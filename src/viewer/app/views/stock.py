@@ -26,7 +26,6 @@ def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
 
     # implement caching (in memory) at image level to avoid all data manipulation if at all possible
     sector_momentum_plot = cached_sector_performance(sector, sector_companies, cip, window_size=14)
-    assert sector_momentum_plot is not None
     c_vs_s_plot = cached_company_versus_sector(stock, sector, sector_companies, cip)
 
     # invoke separate function to cache the calls when we can
