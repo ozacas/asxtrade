@@ -31,6 +31,7 @@ from app.models import (
     company_prices,
     find_movers,
     find_named_companies,
+    companies_with_same_sector,
     latest_quote,
     Timeframe,
     day_low_high
@@ -119,7 +120,7 @@ def all_sector_fixture(company_details_factory):
     company_details_factory.create()
 
 @pytest.mark.django_db
-def test_all_sectors(all_sector_fixture):
+def test_all_sectors(all_sector_fixture): # pylint: disable=unused-argument,redefine-outer-name
     # since company_details_factory gives a single ANZ company details record, this test will work...
     ret = all_sectors()
     #print(ret)
@@ -359,6 +360,12 @@ def test_find_movers(quotation_fixture, monkeypatch):
     assert len(results) == 1
     assert results.loc['ABC'] == 60.0
 
+@pytest.mark.django_db
+def test_companies_with_same_sector(comp_deets):
+    result = companies_with_same_sector('ANZ')
+    assert isinstance(result, set)
+    assert result == set(['ANZ'])
+    
 @pytest.mark.django_db
 def test_find_named_companies(quotation_fixture, monkeypatch):
     def mock_quot_date(*args, **kwargs):
