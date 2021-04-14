@@ -143,7 +143,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
         plot = plot + p9.geom_text(p9.aes(label="value"), size=8, color="white")
     return plot
 
-def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str:
+def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str: # pylint: disable=unused-argument
     columns_to_report = ["pe", "eps", "annual_dividend_yield", "volume", \
                     "last_price", "change_in_percent_cumulative", \
                     "change_price", "market_cap", "number_of_shares"]
@@ -264,7 +264,7 @@ def plot_company_rank(df: pd.DataFrame):
     return plot
 
 
-def plot_company_versus_sector(df: pd.DataFrame, stock: str, sector: str) -> str:
+def plot_company_versus_sector(df: pd.DataFrame, stock: str, sector: str) -> str: # pylint: disable=unused-argument
     df["date"] = pd.to_datetime(df["date"])
     # print(df)
     plot = (

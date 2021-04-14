@@ -126,6 +126,7 @@ def test_all_sectors(all_sector_fixture):
     assert ret == [('Financials', 'Financials')]
     # and check the reverse is true: financials -> ANZ
     all_sector_stocks.cache_clear()
+    stocks_by_sector.cache_clear()
     assert all_sector_stocks('Financials') == set(['ANZ'])
 
 @pytest.mark.django_db
@@ -186,22 +187,22 @@ def comp_deets(company_details_factory, security_factory):
 
 @pytest.mark.django_db
 def test_stock_info(comp_deets):
-    t = stock_info('ANZ')
-    assert isinstance(t, tuple)
-    assert len(t) == 2
-    assert len(t[0]) == 1
-    assert isinstance(t[0], QuerySet)
-    s = t[0].first()
-    assert s.asx_code == 'ANZ'
-    assert s.asx_isin_code == 'ISIN000001'
-    assert isinstance(t[1], CompanyDetails)
-    assert t[1].asx_code == 'ANZ'
+    d = stock_info('ANZ')
+    assert isinstance(d, dict)
 
+    assert 'securities' in d
+    assert d['asx_code'] == 'ANZ'
+    assert isinstance(d['securities'], QuerySet)
+    d2 = model_to_dict(d['securities'].first())
+    assert d2['asx_code'] == 'ANZ'
+    assert d2['asx_isin_code'] == 'ISIN000001'
+   
 @pytest.mark.django_db
 def test_stocks_by_sector(comp_deets):
     df = stocks_by_sector()
     assert df is not None
     assert isinstance(df, pd.DataFrame)
+
     assert len(df) == 1
     assert df.iloc[0].asx_code == 'ANZ'
     assert df.iloc[0].sector_name == 'Financials'
