@@ -68,6 +68,7 @@ python3 manage.py migrate
 
 python3 manage.py createsuperuser
 
+export MPLBACKEND=Agg # recommended: all testing is done with this matplotlib backend plugin to integrate with Django server
 python3 manage.py runserver # run on local dev. host
 ~~~~
 
