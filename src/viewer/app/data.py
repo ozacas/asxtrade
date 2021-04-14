@@ -1,3 +1,7 @@
+"""
+Responsible for preparing pandas dataframes, will eventually become the basis for performing data downloads
+from the app. A second responsibility for caching dynamic images via cache_plot()
+"""
 from collections import defaultdict
 from datetime import datetime
 import io
