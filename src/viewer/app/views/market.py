@@ -16,8 +16,9 @@ from app.models import (
     validate_user,
     stocks_by_sector
 )
+from app.data import cache_plot
 from app.plots import (
-    plot_heatmap,
+    cached_heatmap,
     plot_series,
     plot_market_wide_sector_performance,
     plot_market_cap_distribution,
@@ -33,21 +34,23 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     sector_timeframe = Timeframe(past_n_days=sector_n_days)
     df = cached_all_stocks_cip(timeframe)
     sector_df = cached_all_stocks_cip(sector_timeframe)
-    sentiment_plot, top10, bottom10 = plot_heatmap(df, timeframe, n_top_bottom=n_top_bottom)
-    sector_performance_plot = plot_market_wide_sector_performance(sector_df)
-
+    sentiment_plot = cached_heatmap(tuple(df.index), timeframe, df)
+    sector_performance_plot = cache_plot(f"sector-performance-{sector_timeframe.description}", 
+                                      lambda: plot_market_wide_sector_performance(sector_df))
+    market_cap_dist_plot = cache_plot(f"market-cap-dist-{sector_timeframe.description}",
+                                      lambda: plot_market_cap_distribution(tuple(df.index), latest_quotation_date('ANZ'), sector_df.columns[0]))
     context = {
-        "sentiment_data": sentiment_plot,
+        "sentiment_uri": sentiment_plot,
         "n_days": timeframe.n_days,
         "n_stocks_plotted": len(df),
         "n_top_bottom": n_top_bottom,
-        "best_ten": top10,
-        "worst_ten": bottom10,
+        #"best_ten": top10,
+        #"worst_ten": bottom10,
         "watched": user_watchlist(request.user),
-        "sector_performance": sector_performance_plot,
+        "sector_performance_uri": sector_performance_plot,
         "sector_performance_title": "Cumulative sector avg. performance: {}".format(sector_timeframe.description),
         "title": "Market sentiment: {}".format(timeframe.description),
-        "market_cap_distribution_plot": plot_market_cap_distribution(tuple(df.index), latest_quotation_date('ANZ'), sector_df.columns[0])
+        "market_cap_distribution_uri": market_cap_dist_plot
     }
     return render(request, "market_sentiment_view.html", context=context)
 
@@ -121,6 +124,14 @@ def show_pe_trends(request):
                             'sum_eps': eps_sum, 'n_stocks': n_stocks, 'n_sector_stocks_pe_only': n_pe })
         
     df = pd.DataFrame.from_records(records)
+    # these arent per-user plots: they can safely be shared across all users of the site, so the key reflects that
+    sector_pe_cache_key = f"{timeframe.description}-by-sector-pe-plot"
+    sector_eps_cache_key = f"{timeframe.description}-by-sector-eps-plot"
+    market_pe_cache_key = f"{timeframe.description}-market-pe-mean"
+    market_pe_plot_uri = cache_plot(market_pe_cache_key,
+                                    lambda: plot_series(market_avg_pe_df, x='date', y='market_pe', 
+                                                        y_axis_label="Market-wide mean P/E", 
+                                                        color=None, use_smooth_line=True))
     #print(df[df["sector"] == 'Utilities'])
     #print(df)
     context = {
@@ -128,8 +139,8 @@ def show_pe_trends(request):
         "n_stocks": n_stocks,
         "timeframe": timeframe,
         "n_stocks_with_pe": n_non_zero_sum,
-        "sector_pe_plot": plot_sector_field(df, field="mean_pe"),
-        "sector_eps_plot": plot_sector_field(df, field="sum_eps"),
-        "market_pe_plot": plot_series(market_avg_pe_df, x='date', y='market_pe', y_axis_label="Market-wide mean P/E", color=None, use_smooth_line=True)
+        "sector_pe_plot_uri": cache_plot(sector_pe_cache_key, lambda: plot_sector_field(df, field="mean_pe")),
+        "sector_eps_plot_uri": cache_plot(sector_eps_cache_key, lambda: plot_sector_field(df, field="sum_eps")),
+        "market_pe_plot_uri": market_pe_plot_uri
     }
     return render(request, "pe_trends.html", context)

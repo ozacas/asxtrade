@@ -15,7 +15,7 @@
         <li>Stocks participating in a given sector can be found via <a href="{% url 'sector-search' %}">Find By Sector</a></li>
     </ul>
 
-    <img class="mt-4" src="data:image/png;base64, {{ sector_pe_plot }}" alt="ASX Sector PE breakdown">
+    <img class="mt-4" src="/png/{{ sector_pe_plot_uri }}" alt="ASX Sector PE breakdown">
 
 </div>
 
@@ -34,7 +34,7 @@
         <li>Negative values are possible if more stocks are underperforming than generating earnings as has been common during the COVID-19 pandemic</li>
     </ul>
 
-    <img class="mt-4" src="data:image/png;base64, {{ sector_eps_plot }}" alt="ASX Sector EPS breakdown">
+    <img class="mt-4" src="/png/{{ sector_eps_plot_uri }}" alt="ASX Sector EPS breakdown">
 </div>
 
 <div class="row">
@@ -47,6 +47,6 @@
         <li>Provided for comparison with a given company or sector for comparison</li>
         <li>This plot is the daily average of {{ n_stocks_with_pe }} stocks</li>
     </ul>
-    <img class="mt-4" src="data:image/png;base64, {{ market_pe_plot }}" alt="ASX market-wide P/E plot">
+    <img class="mt-4" src="/png/{{ market_pe_plot_uri }}" alt="ASX market-wide P/E plot">
 </div>
 {% endblock %}

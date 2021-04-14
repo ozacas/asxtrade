@@ -4,16 +4,16 @@ base64 data for various django templates to use.
 """
 import base64
 import io
-import hashlib
 from datetime import datetime
 from collections import Counter, defaultdict
+from typing import Iterable
 import numpy as np
 import pandas as pd
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
-from app.models import stocks_by_sector, day_low_high, Timeframe, valid_quotes_only, timing, selected_cached_stocks_cip
+from app.models import stocks_by_sector, Timeframe, valid_quotes_only, timing, selected_cached_stocks_cip
 from app.data import make_sector_performance_dataframe, make_stock_vs_sector_dataframe, make_portfolio_dataframe, cache_plot
 
 def price_change_bins():
@@ -44,28 +44,20 @@ def price_change_bins():
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
 
-
-def hash_str(key: str) -> str:
-    assert len(key) > 0
-    result = hashlib.sha256(key.encode('utf-8')).hexdigest()
-    assert isinstance(result, str)
-    return result
-
-def cached_heatmap(asx_codes, timeframe: Timeframe, df: pd.DataFrame=None) -> str:
-    key = hash_str("-".join(asx_codes) + timeframe.description + "-stocks-sentiment")
+def cached_heatmap(asx_codes: Iterable[str], timeframe: Timeframe, df: pd.DataFrame=None) -> str:
+    key = "-".join(asx_codes) + timeframe.description + "-stocks-sentiment"
     if df is None:
         df = selected_cached_stocks_cip(asx_codes, timeframe)
     return cache_plot(key, lambda: plot_heatmap(df, timeframe))
 
 def cached_breakdown(asx_codes, timeframe: Timeframe, df: pd.DataFrame=None):
-    key = hash_str("-".join(asx_codes)+"-breakdown")
+    key = "-".join(asx_codes)+"-breakdown"
     if df is None:
         df = selected_cached_stocks_cip(asx_codes, timeframe)
     return cache_plot(key, lambda: plot_breakdown(df))
 
 def cached_company_rank(df: pd.DataFrame, cache_key: str) -> str:
-    key = hash_str(cache_key)
-    return cache_plot(key, lambda: plot_company_rank(df))
+    return cache_plot(cache_key, lambda: plot_company_rank(df))    
 
 def cached_company_versus_sector(stock: str, sector: str, sector_companies, cip: pd.DataFrame) -> str:
     cache_key = f"{stock}-{sector}-company-versus-sector"
@@ -82,9 +74,9 @@ def cached_sector_performance(sector: str, sector_companies, cip: pd.DataFrame, 
     return cache_plot(cache_key, inner)
 
 def cached_portfolio_performance(df: pd.DataFrame, username: str):
-    overall_key = hash_str(f"{username}-portfolio-performance")
-    stock_key = hash_str(f"{username}-stock-performance")
-    contributors_key = hash_str(f"{username}-contributor-performance")
+    overall_key = f"{username}-portfolio-performance"
+    stock_key = f"{username}-stock-performance"
+    contributors_key = f"{username}-contributor-performance"
 
     return (cache_plot(overall_key, lambda: plot_overall_portfolio(df)),
             cache_plot(stock_key, lambda: plot_portfolio_stock_performance(df)),
@@ -151,7 +143,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
         plot = plot + p9.geom_text(p9.aes(label="value"), size=8, color="white")
     return plot
 
-def plot_fundamentals(df: pd.DataFrame, stock: str) -> str:
+def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str:
     columns_to_report = ["pe", "eps", "annual_dividend_yield", "volume", \
                     "last_price", "change_in_percent_cumulative", \
                     "change_price", "market_cap", "number_of_shares"]
@@ -175,7 +167,7 @@ def plot_fundamentals(df: pd.DataFrame, stock: str) -> str:
     n = len(columns_to_report)
     plot = (
         p9.ggplot(plot_df, p9.aes("fetch_date", "value", color="indicator"))
-        + p9.geom_line(show_legend=False)
+        + p9.geom_line(show_legend=False, size=line_size)
         + p9.facet_wrap("~ indicator", nrow=n, ncol=1, scales="free_y")
         + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), 
                    axis_text_y=p9.element_text(size=7),
@@ -729,8 +721,9 @@ def plot_trend(dataframe: pd.DataFrame, sample_period="M") -> str:
     assert dataframe is not None
 
     dataframe = dataframe.transpose()
-    dataframe.index = pd.to_datetime(dataframe.index)
-    dataframe = dataframe.resample(sample_period, kind="period").max()
+    dataframe.index = pd.to_datetime(dataframe.index, format='%Y-%m-%d')
+    dataframe = dataframe.resample(sample_period).max()
+    print(dataframe.index)
     plot = (
         p9.ggplot(dataframe, p9.aes(x="dataframe.index", y=dataframe.columns[0]))
         + p9.geom_bar(stat="identity", fill="#880000", alpha=0.5)
@@ -739,66 +732,28 @@ def plot_trend(dataframe: pd.DataFrame, sample_period="M") -> str:
     )
     return plot
 
-
-def plot_point_scores(stock: str, sector_companies, all_stocks_cip: pd.DataFrame, rules):
+def plot_point_scores(cache_key: str, point_score_dataframe: pd.DataFrame) -> str:
     """
-    Visualise the stock in terms of point scores as described on the stock view page. Rules to apply
-    can be specified by rules (default rules are provided by rule_*())
-
-    Points are lost for equivalent downturns and the result plotted. All rows in all_stocks_cip will be
-    used to calculate the market average on a given trading day, whilst only sector_companies will
-    be used to calculate the sector average. A utf-8 base64 encoded plot image is returned
+    Visualise the stock in terms of point scores as described on the stock view page. 
+    :param: point_score_dataframe result from call to make_point_score_dataframe() ie. ready to plot DataFrame
+    :rtype: string for accessing the plot via the Django cache
     """
-    assert len(stock) >= 3
-    assert all_stocks_cip is not None
-    assert rules is not None and len(rules) > 0
+    return cache_plot(cache_key, lambda: plot_series(point_score_dataframe, x="date", y="points"))
 
-    rows = []
-    points = 0
-    day_low_high_df = day_low_high(stock, all_dates=all_stocks_cip.columns)
-    state = {
-        "day_low_high_df": day_low_high_df,  # never changes each day, so we init it here
-        "all_stocks_change_in_percent_df": all_stocks_cip,
-        "stock": stock,
-        "daily_range_threshold": 0.20,  # 20% at either end of the daily range gets a point
-    }
-    net_points_by_rule = defaultdict(int)
-    for date in all_stocks_cip.columns:
-        market_avg = all_stocks_cip[date].mean()
-        sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
-        stock_move = all_stocks_cip.at[stock, date]
-        state.update(
-            {
-                "market_avg": market_avg,
-                "sector_avg": sector_avg,
-                "stock_move": stock_move,
-                "date": date,
-            }
+def plot_points_by_rule(cache_key: str, net_points_by_rule: defaultdict(int)) -> str:
+    def inner():
+        rows = []
+        for k, v in net_points_by_rule.items():
+            rows.append({"rule": str(k), "net_points": v})
+        df = pd.DataFrame.from_records(rows)
+        return (
+            p9.ggplot(df, p9.aes(x="rule", y="net_points"))
+            + p9.labs(x="Rule", y="Contribution to points by rule")
+            + p9.geom_bar(stat="identity")
+            + p9.theme(axis_text_y=p9.element_text(size=7), subplots_adjust={"left": 0.2})
+            + p9.coord_flip()
         )
-        points += sum(map(lambda r: r(state), rules))
-        for r in rules:
-            k = r.__name__
-            if k.startswith("rule_"):
-                k = k[5:]
-            net_points_by_rule[k] += r(state)
-        rows.append({"points": points, "stock": stock, "date": date})
-
-    df = pd.DataFrame.from_records(rows)
-    df["date"] = pd.to_datetime(df["date"])
-    point_score_plot = plot_series(df, x="date", y="points")
-
-    rows = []
-    for k, v in net_points_by_rule.items():
-        rows.append({"rule": str(k), "net_points": v})
-    df = pd.DataFrame.from_records(rows)
-    net_rule_contributors_plot = (
-        p9.ggplot(df, p9.aes(x="rule", y="net_points"))
-        + p9.labs(x="Rule", y="Contribution to points by rule")
-        + p9.geom_bar(stat="identity")
-        + p9.theme(axis_text_y=p9.element_text(size=7), subplots_adjust={"left": 0.2})
-        + p9.coord_flip()
-    )
-    return point_score_plot, plot_as_inline_html_data(net_rule_contributors_plot)
+    return cache_plot(cache_key, inner)
 
 
 def plot_boxplot_series(df, normalisation_method=None):
@@ -853,7 +808,7 @@ def plot_boxplot_series(df, normalisation_method=None):
     )
 
 def plot_sector_field(df: pd.DataFrame, field, n_col=3):
-    print(df.columns)
+    #print(df.columns)
     #assert set(df.columns) == set(['sector', 'date', 'mean_pe', 'sum_pe', 'sum_eps', 'mean_eps', 'n_stocks'])
     n_unique_sectors = df['sector'].nunique()
     df['date'] = pd.to_datetime(df['date'])

@@ -13,7 +13,8 @@ from app.models import (validate_stock, validate_user, stock_info, cached_all_st
 from app.analysis import (default_point_score_rules, rank_cumulative_change, 
                         calculate_trends)
 from app.messages import warning
-from app.plots import (plot_point_scores, plot_fundamentals, make_rsi_plot, plot_trend, 
+from app.data import cache_plot, make_point_score_dataframe
+from app.plots import (plot_point_scores, plot_points_by_rule, plot_fundamentals, make_rsi_plot, plot_trend, 
                         cached_portfolio_performance, cached_company_rank, cached_sector_performance, cached_company_versus_sector)
 
 
@@ -25,51 +26,56 @@ def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
 
     # implement caching (in memory) at image level to avoid all data manipulation if at all possible
     sector_momentum_plot = cached_sector_performance(sector, sector_companies, cip, window_size=14)
+    assert sector_momentum_plot is not None
     c_vs_s_plot = cached_company_versus_sector(stock, sector, sector_companies, cip)
 
     # invoke separate function to cache the calls when we can
     point_score_plot = net_rule_contributors_plot = None
     if len(sector_companies) > 0:
-        point_score_plot, net_rule_contributors_plot = \
-                plot_point_scores(stock,
-                                  sector_companies,
-                                  cip,
-                                  default_point_score_rules())
+        df, net_points_by_rule = make_point_score_dataframe(stock, sector_companies, cip, default_point_score_rules())
+        ps_cache_key = f"{timeframe.description}-{stock}-point-score-plot"
+        np_cache_key = f"{timeframe.description}-{stock}-rules-by-points"
+        point_score_plot = plot_point_scores(ps_cache_key, df)
+        net_rule_contributors_plot = plot_points_by_rule(np_cache_key, net_points_by_rule)
+        
     return {  
         "timeframe": timeframe,
         "sector_momentum": {
-            "plot": sector_momentum_plot,
+            "plot_uri": sector_momentum_plot,
             "title": "{} sector stocks".format(sector),
         },
         "company_versus_sector": {
-            "plot": c_vs_s_plot,
+            "plot_uri": c_vs_s_plot,
             "title": "Performance against sector",
         },
         "point_score": {
-            "plot": point_score_plot,
+            "plot_uri": point_score_plot,
             "title": "Points score due to price movements",
         },
         "net_contributors": {
-            "plot": net_rule_contributors_plot,
+            "plot_uri": net_rule_contributors_plot,
             "title": "Contributions to point score by rule",
         }
     }
 
 @timing
 def make_fundamentals(timeframe: Timeframe, stock: str):
-    df = company_prices(
-        [stock],
-        timeframe,
-        fields=("eps", "volume", "last_price", "annual_dividend_yield", \
-                "pe", "change_in_percent", "change_price", "market_cap", \
-                "number_of_shares"),
-        missing_cb=None
-    )
-    #print(df)
-    df['change_in_percent_cumulative'] = df['change_in_percent'].cumsum() # nicer to display cumulative
-    df = df.drop('change_in_percent', axis=1)
+    def inner():
+        df = company_prices(
+            [stock],
+            timeframe,
+            fields=("eps", "volume", "last_price", "annual_dividend_yield", \
+                    "pe", "change_in_percent", "change_price", "market_cap", \
+                    "number_of_shares"),
+            missing_cb=None
+        )
+        #print(df)
+        df['change_in_percent_cumulative'] = df['change_in_percent'].cumsum() # nicer to display cumulative
+        df = df.drop('change_in_percent', axis=1)
+        return plot_fundamentals(df, stock)
+
     return {
-        "plot": plot_fundamentals(df, stock),
+        "plot_uri": cache_plot(f"{stock}-{timeframe.description}-fundamentals-plot", inner),
         "title": "Stock fundamentals: EPS, PE, DY etc.",
         "timeframe": timeframe,
     }
@@ -86,12 +92,12 @@ def show_stock(request, stock=None, n_days=2 * 365):
     plot_timeframe = Timeframe(past_n_days=n_days) # for template
     stock_df = rsi_data(stock, timeframe) # may raise 404 if too little data available
     company_details = stock_info(stock, lambda msg: warning(request, msg))
-    momentum_plot = make_rsi_plot(stock, stock_df)
+    momentum_plot = cache_plot(f"{timeframe.description}-{stock}-rsi-plot", lambda: make_rsi_plot(stock, stock_df))
 
     # plot the price over timeframe in monthly blocks
     prices = stock_df[['last_price']].transpose() # use list of columns to ensure pd.DataFrame not pd.Series
     prices = prices.filter(items=plot_timeframe.all_dates(), axis='columns') # drop any date in "warm up" period
-    monthly_maximum_plot = plot_trend(prices, sample_period='M')
+    monthly_maximum_plot = cache_plot(f"{timeframe.description}-{stock}-montly-maximum-plot", lambda: plot_trend(prices, sample_period='M'))
 
     # populate template and render HTML page with context
     context = {
@@ -103,7 +109,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
            "rsi_plot": momentum_plot,
            "monthly_highest_price": {
                 "title": "Highest price each month",
-                "plot": monthly_maximum_plot,
+                "plot_uri": monthly_maximum_plot,
            }
         },
         "fundamentals": make_fundamentals(plot_timeframe, stock),

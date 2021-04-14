@@ -8,7 +8,7 @@
           </ul>
 
           <img class="company_versus_sector"
-               src="data:image/png;base64, {{ data.company_versus_sector.plot }}"
+               src="/png/{{ data.company_versus_sector.plot_uri }}"
                alt="{{ data.company_versus_sector.title }}" />
      {% endif %}
 </div>
@@ -35,10 +35,10 @@
 
           <div class="mt-4">
                <img class="point_score_plot"
-                    src="data:image/png;base64, {{ data.point_score.plot }}"
+                    src="/png/{{ data.point_score.plot_uri }}"
                     alt="{{ data.point_score.title }}" />
                <img class="net_contributors_plot"
-                    src="data:image/png;base64, {{ data.net_contributors.plot }}"
+                    src="/png/{{ data.net_contributors.plot_uri }}"
                     alt="{{ data.net_contributors.title }}" />
           </div>
      {% endif %}
@@ -48,7 +48,7 @@
           <h3>{{ data.sector_momentum.title }}</h3>
 
           <img class="sector_momentum_plot"
-               src="data:image/png;base64, {{ data.sector_momentum.plot }}"
+               src="/png/{{ data.sector_momentum.plot_uri }}"
                alt="{{ data.sector_momentum.title }}" />
      {% endif %}
 </div>

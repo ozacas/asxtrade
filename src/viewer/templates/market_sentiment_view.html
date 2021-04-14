@@ -10,7 +10,7 @@
     The data may be downloaded in Excel-format using the button below the plot.
     </p>
 
-    <img class="market-sentiment mt-4" src="data:image/png;base64, {{ sentiment_data }}" alt="ASX market sentiment plot">
+    <img class="market-sentiment mt-4" src="/png/{{ sentiment_uri }}" alt="ASX market sentiment plot">
 
     <span class="row">
         <a href="/data/market_sentiment/csv" class="btn btn-primary">Download CSV</a>&nbsp;&nbsp;
@@ -42,7 +42,7 @@
     </div>
 {% endif %}
 
-{% if sector_performance is None %}
+{% if sector_performance_uri is None %}
 {% else %}
 <div class="row">
     <h3 class="mt-4">{{ sector_performance_title }}</h3>
@@ -52,7 +52,7 @@
         <li>Shows sector-wide average stock performance over time</li>
     </ul>
 
-    <img class="sector-performance-plot mt-4" src="data:image/png;base64, {{ sector_performance }}" alt="ASX sector performance plot" />
+    <img class="sector-performance-plot mt-4" src="/png/{{ sector_performance_uri }}" alt="ASX sector performance plot" />
 </div>
 
 <div class="row">
@@ -60,7 +60,7 @@
 </div>
 {% endif %}
 
-{% if market_cap_distribution_plot is None %}
+{% if market_cap_distribution_uri is None %}
 {% else %}
 <div class="row">
     <h3 class="mt-4">Distribution of ASX market cap</h3>
@@ -70,7 +70,7 @@
         <li>Large cap have a market cap in excess of 10 billion $AUD</li>
         <li>This figure shows two dates: most recent trading day and six months ago: to show trends in market cap between now and then for all company sizes</li>
     </ul>
-    <img src="data:image/png;base64, {{ market_cap_distribution_plot }}" alt="ASX market cap distribution" />
+    <img src="/png/{{ market_cap_distribution_uri }}" alt="ASX market cap distribution" />
 </div>
 {% endif %}
 

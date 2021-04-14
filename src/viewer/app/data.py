@@ -1,32 +1,38 @@
 from collections import defaultdict
 from datetime import datetime
 import io
+import hashlib
+from typing import Iterable
 import pandas as pd
-from app.models import companies_with_same_sector
+from app.models import companies_with_same_sector, day_low_high
 from django.core.cache import cache
 import plotnine as p9
 import matplotlib.pyplot as plt
 
 
-def is_in_cache(key: str, django_cache=None):
-    if django_cache is None:
-        django_cache = cache
-    return key in django_cache
+def hash_str(key: str) -> str:
+    assert len(key) > 0
+    result = hashlib.sha256(key.encode('utf-8')).hexdigest()
+    assert isinstance(result, str)
+    return result
 
-def cache_plot(key: str, plot_factory=None, debug=True, timeout=10.0*60, django_cache=None):
+def cache_plot(key: str, plot_factory=None, debug=False, timeout=1.0*60, django_cache=None):
     assert plot_factory is not None
     
     if django_cache is None:
         django_cache = cache
 
+    # ensure all URLs are sha256 hexdigest's regardless of the key specified to avoid data leak and security from brute-forcing
+    cache_key = hash_str(key)
+
     # plot already done and in cache?
-    if key in django_cache:
-        return key
+    if cache_key in django_cache:
+        return cache_key
 
     with io.BytesIO(bytearray(200*1024)) as buf:
         plot = plot_factory()
         if plot is None:
-            django_cache.delete(key)
+            django_cache.delete(cache_key)
             return None
         if isinstance(plot, p9.ggplot):
             fig = plot.draw() # need to invoke matplotlib.savefig() so deref ...
@@ -38,10 +44,10 @@ def cache_plot(key: str, plot_factory=None, debug=True, timeout=10.0*60, django_
         fig.savefig(buf, format='png')
         buf.seek(0)
         if debug:
-            print(f"Setting cache plot (timeout {timeout} sec.): {key}")
-        django_cache.set(key, buf.read(), timeout=timeout, read=True) # no page should take 10 minutes to render so this should guarantee object exists when served...
+            print(f"Setting cache plot (timeout {timeout} sec.): {key} -> {cache_key}")
+        django_cache.set(cache_key, buf.read(), timeout=timeout, read=True) # no page should take 10 minutes to render so this should guarantee object exists when served...
         plt.close(fig)
-        return key
+        return cache_key
 
 def make_portfolio_dataframe(df: pd.DataFrame, melt=False):
     assert df is not None
@@ -65,8 +71,9 @@ def make_portfolio_dataframe(df: pd.DataFrame, melt=False):
     return df
 
 def make_sector_performance_dataframe(all_stocks_cip: pd.DataFrame, sector_companies=None) -> pd.DataFrame:
-    cip, ok = prep_cip_dataframe(all_stocks_cip, sector_companies)
-    if not ok:
+    cip = prep_cip_dataframe(all_stocks_cip, None, sector_companies)
+    assert cip is not None
+    if cip is None:
         return None
 
     rows = []
@@ -83,7 +90,8 @@ def make_sector_performance_dataframe(all_stocks_cip: pd.DataFrame, sector_compa
     return df
 
 
-def prep_cip_dataframe(cip: pd.DataFrame, stock: str, sector_companies=None) -> tuple:
+def prep_cip_dataframe(cip: pd.DataFrame, stock: str, sector_companies:Iterable[str]=None) -> pd.DataFrame:
+    assert (stock is None and sector_companies is not None) or (stock is not None)
     if sector_companies is None:
         sector_companies = companies_with_same_sector(stock)
     if len(sector_companies) == 0:
@@ -114,3 +122,38 @@ def make_stock_vs_sector_dataframe(all_stocks_cip: pd.DataFrame, stock: str, sec
     df = pd.DataFrame.from_records(stock_versus_sector)
     return df
 
+
+def make_point_score_dataframe(stock: str, sector_companies: Iterable[str], cip: pd.DataFrame, rules: Iterable[tuple]) -> tuple:
+    rows = []
+    points = 0
+    day_low_high_df = day_low_high(stock, all_dates=cip.columns)
+    state = {
+        "day_low_high_df": day_low_high_df,  # never changes each day, so we init it here
+        "all_stocks_change_in_percent_df": cip,
+        "stock": stock,
+        "daily_range_threshold": 0.20,  # 20% at either end of the daily range gets a point
+    }
+    net_points_by_rule = defaultdict(int)
+    for date in cip.columns:
+        market_avg = cip[date].mean()
+        sector_avg = cip[date].filter(items=sector_companies).mean()
+        stock_move = cip.at[stock, date]
+        state.update(
+            {
+                "market_avg": market_avg,
+                "sector_avg": sector_avg,
+                "stock_move": stock_move,
+                "date": date,
+            }
+        )
+        points += sum(map(lambda r: r(state), rules))
+        for r in rules:
+            k = r.__name__
+            if k.startswith("rule_"):
+                k = k[5:]
+            net_points_by_rule[k] += r(state)
+        rows.append({"points": points, "stock": stock, "date": date})
+
+    df = pd.DataFrame.from_records(rows)
+    df["date"] = pd.to_datetime(df["date"])
+    return df, net_points_by_rule
