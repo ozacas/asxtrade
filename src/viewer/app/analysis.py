@@ -2,7 +2,7 @@
 Responsible for performing computations to support a visualisation/analysis result
 """
 from collections import defaultdict, OrderedDict
-from datetime import datetime
+import secrets
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,11 +14,8 @@ from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance
 from pypfopt.hierarchical_portfolio import HRPOpt
-from app.models import company_prices, day_low_high, all_sector_stocks, stocks_by_sector, Timeframe, validate_date, companies_with_same_sector
-from app.plots import (
-    plot_sector_performance,
-    plot_company_versus_sector,
-)
+from app.models import company_prices, day_low_high, stocks_by_sector, Timeframe, validate_date
+from app.data import cache_plot
 from app.messages import warning
 
 def as_css_class(thirty_day_slope, three_hundred_day_slope):
@@ -246,55 +243,6 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     print("Found {} outlier stocks".format(len(results)))
     return results
 
-def prep_cip_dataframe(cip: pd.DataFrame, sector_companies=None) -> tuple:
-    if sector_companies is None:
-        sector_companies = companies_with_same_sector(stock)    
-    if len(sector_companies) == 0:
-        return None, False
-
-    cip = cip.filter(items=sector_companies, axis='index')
-    cip = cip.fillna(0.0)
-    return cip, True
-
-def make_stock_vs_sector_dataframe(all_stocks_cip: pd.DataFrame, stock: str, sector_companies=None) -> pd.DataFrame:
-    cip, ok = prep_cip_dataframe(all_stocks_cip, sector_companies)
-    if not ok:
-        return None
-
-    cum_sum = defaultdict(float)
-    stock_versus_sector = []
-    # identify the best performing stock in the sector and add it to the stock_versus_sector rows...
-    best_stock_in_sector = cip.sum(axis=1).nlargest(1).index[0]
-    best_group = '{} (#1 in sector)'.format(best_stock_in_sector)
-    for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
-        for asx_code, daily_change in cip[day].iteritems():
-            cum_sum[asx_code] += daily_change
-  
-        stock_versus_sector.append({ 'group': stock, 'date': day, 'value': cum_sum[stock] })
-        stock_versus_sector.append({ 'group': 'sector_average', 'date': day, 'value': pd.Series(cum_sum).mean() })
-        if stock != best_stock_in_sector:
-            stock_versus_sector.append({ 'group': best_group, 'value': cum_sum[best_stock_in_sector], 'date': day})
-    df = pd.DataFrame.from_records(stock_versus_sector)
-    return df
-
-def make_sector_performance_dataframe(all_stocks_cip: pd.DataFrame, sector_companies=None) -> pd.DataFrame:
-    cip, ok = prep_cip_dataframe(all_stocks_cip, sector_companies)
-    if not ok:
-        return None
-
-    rows = []
-    cum_sum = defaultdict(float)
-    for day in sorted(cip.columns, key=lambda k: datetime.strptime(k, "%Y-%m-%d")):
-        for asx_code, daily_change in cip[day].iteritems():
-            cum_sum[asx_code] += daily_change
-        n_pos = len(list(filter(lambda t: t[1] >= 5.0, cum_sum.items())))
-        n_neg = len(list(filter(lambda t: t[1] < -5.0, cum_sum.items())))
-        n_unchanged = len(cip) - n_pos - n_neg
-        rows.append({ 'n_pos': n_pos, 'n_neg': n_neg, 'n_unchanged': n_unchanged, 'date': day})
-       
-    df = pd.DataFrame.from_records(rows)
-    return df
-
 def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
     """Remove low weights as not significant contributors to portfolio performance"""
     sum_of_weights = sum(map(lambda t: t[1], weights.items()))
@@ -481,15 +429,16 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
             ax.legend()
             plt.tight_layout()
             fig = plt.gcf()
-            efficient_frontier_plot = plot_as_base64(fig)
-            plt.close(fig)
+
+            # NB: we dont bother caching these plots since we must calculate so many other values but we need to serve them via cache_plot() anyway
+            efficient_frontier_plot = cache_plot(secrets.token_urlsafe(32), lambda: fig)
         
             # only plot covmatrix/corr for significant holdings to ensure readability
             m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())[:30]]).ledoit_wolf()
             #print(m)
-            ax = plot_covariance(m, plot_correlation=True)
-            correlation_plot = plot_as_base64(ax.figure)
-            plt.close(ax.figure)
+            cor_plot = plot_covariance(m, plot_correlation=True)
+            
+            correlation_plot = cache_plot(secrets.token_urlsafe(32), lambda: cor_plot.figure)
             assert isinstance(cleaned_weights, OrderedDict)
             return cleaned_weights, performance_dict, \
                    efficient_frontier_plot, correlation_plot, messages, \
@@ -500,3 +449,4 @@ def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stock
 
     print("*** WARNING: unable to optimise portolio!")
     return (None, None, None, None, messages, title, total_portfolio_value, 0.0, len(latest_prices))
+

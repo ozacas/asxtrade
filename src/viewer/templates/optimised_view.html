@@ -17,7 +17,7 @@
     </form>
 </div>
 
-{% if efficient_frontier_plot is not None %}
+{% if efficient_frontier_plot_uri is not None %}
 <div class="row mt-4">
     <h2>Results</h2>
 </div>
@@ -99,7 +99,7 @@
 </div>
 
 <div class="mt-2 row">
-    <img src="data:image/png;base64, {{ efficient_frontier_plot }}" alt="Plot of portfolio risk/performance">
+    <img src="/png/{{ efficient_frontier_plot_uri }}" alt="Plot of portfolio risk/performance" />
 </div>
 
 <div class="row mt-2">
@@ -107,7 +107,7 @@
 </div>
 
 <div class="mt-2 row">
-    <img src="data:image/png;base64, {{ correlation_plot }}" alt="Plot of stock correlation of optimal portfolio">
+    <img src="/png/{{ correlation_plot_uri }}" alt="Plot of stock correlation of optimal portfolio">
 </div>
 
 {% endif %}

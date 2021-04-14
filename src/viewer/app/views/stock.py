@@ -3,7 +3,6 @@ Responsible for providing detiled views about a single stock and closely related
 """
 from collections import defaultdict
 from datetime import datetime
-from cachetools import LFUCache
 import pandas as pd
 import numpy as np
 from django.contrib.auth.decorators import login_required
@@ -12,12 +11,11 @@ from app.models import (validate_stock, validate_user, stock_info, cached_all_st
                         Timeframe, company_prices, rsi_data, user_watchlist, selected_cached_stocks_cip, 
                         validate_date, user_purchases, all_available_dates, timing)
 from app.analysis import (default_point_score_rules, rank_cumulative_change, 
-                        calculate_trends, make_sector_performance_dataframe, make_stock_vs_sector_dataframe)
+                        calculate_trends)
 from app.messages import warning
 from app.plots import (plot_point_scores, plot_fundamentals, make_rsi_plot, plot_trend, 
-                        cached_portfolio_performance, cached_company_rank, plot_sector_performance, plot_company_versus_sector)
+                        cached_portfolio_performance, cached_company_rank, cached_sector_performance, cached_company_versus_sector)
 
-image_cache = LFUCache(maxsize=10)
 
 @timing
 def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
@@ -26,20 +24,8 @@ def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
     sector = stock_info(stock).get('sector_name', '')
 
     # implement caching (in memory) at image level to avoid all data manipulation if at all possible
-    tag = "sector-momentum-plot-{}-{}".format(sector, timeframe.description)
-    if tag in image_cache:
-        sector_momentum_plot = image_cache[tag]
-    else:
-        df = make_sector_performance_dataframe(cip, sector_companies)
-        sector_momentum_plot = plot_sector_performance(df, sector, window_size=14) if df is not None else None
-        image_cache[tag] = sector_momentum_plot
-    tag = "c_vs_s_plot-{}-{}".format(stock, timeframe.description)
-    if tag in image_cache:
-        c_vs_s_plot = image_cache[tag]
-    else:
-        df = make_stock_vs_sector_dataframe(cip, stock, sector_companies)
-        c_vs_s_plot = plot_company_versus_sector(df, stock, sector) if df is not None else None
-        image_cache[tag] = c_vs_s_plot
+    sector_momentum_plot = cached_sector_performance(sector, sector_companies, cip, window_size=14)
+    c_vs_s_plot = cached_company_versus_sector(stock, sector, sector_companies, cip)
 
     # invoke separate function to cache the calls when we can
     point_score_plot = net_rule_contributors_plot = None

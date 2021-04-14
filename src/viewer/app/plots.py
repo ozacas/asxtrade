@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
 from app.models import stocks_by_sector, day_low_high, Timeframe, valid_quotes_only, timing, selected_cached_stocks_cip
-from django.core.cache import cache
+from app.data import make_sector_performance_dataframe, make_stock_vs_sector_dataframe, make_portfolio_dataframe, cache_plot
 
 def price_change_bins():
     """
@@ -44,18 +44,6 @@ def price_change_bins():
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
 
-def cache_plot(cache, key: str, plot, debug=True, timeout=10.0*60):
-    assert plot is not None
-    assert cache is not None
-    with io.BytesIO(bytearray(200*1024)) as buf:
-        if isinstance(plot, p9.ggplot):
-            plot = plot.draw() # need to invoke matplotlib.savefig() so deref ...
-        plot.savefig(buf, format='png')
-        buf.seek(0)
-        if debug:
-            print(f"Setting cache plot (timeout 10mins): {key}")
-        cache.set(key, buf.read(), timeout=timeout, read=True) # no page should take 10 minutes to render so this should guarantee object still exists when served...
-        return key
 
 def hash_str(key: str) -> str:
     assert len(key) > 0
@@ -63,39 +51,44 @@ def hash_str(key: str) -> str:
     assert isinstance(result, str)
     return result
 
-def cached_heatmap(asx_codes, timeframe: Timeframe, df:pd.DataFrame=None) -> str:
+def cached_heatmap(asx_codes, timeframe: Timeframe, df: pd.DataFrame=None) -> str:
     key = hash_str("-".join(asx_codes) + timeframe.description + "-stocks-sentiment")
-    if key in cache:
-        return key
     if df is None:
         df = selected_cached_stocks_cip(asx_codes, timeframe)
-    return cache_plot(cache, key, plot_heatmap(df, timeframe))
+    return cache_plot(key, lambda: plot_heatmap(df, timeframe))
 
-def cached_breakdown(asx_codes, timeframe: Timeframe, df:pd.DataFrame=None):
+def cached_breakdown(asx_codes, timeframe: Timeframe, df: pd.DataFrame=None):
     key = hash_str("-".join(asx_codes)+"-breakdown")
-    if key in cache:
-        return key
     if df is None:
         df = selected_cached_stocks_cip(asx_codes, timeframe)
-    return cache_plot(cache, key, plot_breakdown(df))
+    return cache_plot(key, lambda: plot_breakdown(df))
 
 def cached_company_rank(df: pd.DataFrame, cache_key: str) -> str:
     key = hash_str(cache_key)
-    if key in cache:
-        return key
-    return cache_plot(cache, key, plot_company_rank(df))
+    return cache_plot(key, lambda: plot_company_rank(df))
+
+def cached_company_versus_sector(stock: str, sector: str, sector_companies, cip: pd.DataFrame) -> str:
+    cache_key = f"{stock}-{sector}-company-versus-sector"
+    def inner():
+        df = make_stock_vs_sector_dataframe(cip, stock, sector_companies)
+        return plot_company_versus_sector(df, stock, sector) if df is not None else None
+    return cache_plot(cache_key, inner)
+
+def cached_sector_performance(sector: str, sector_companies, cip: pd.DataFrame, window_size=14):
+    cache_key = f"{sector}-sector-performance"
+    def inner():
+        df = make_sector_performance_dataframe(cip, sector_companies)
+        return plot_sector_performance(df, sector, window_size=window_size) if df is not None else None
+    return cache_plot(cache_key, inner)
 
 def cached_portfolio_performance(df: pd.DataFrame, username: str):
     overall_key = hash_str(f"{username}-portfolio-performance")
     stock_key = hash_str(f"{username}-stock-performance")
     contributors_key = hash_str(f"{username}-contributor-performance")
 
-    # if any key is in the cache, they all should be since they are created at the same time
-    if all([overall_key in cache, stock_key in cache, contributors_key in cache]):
-        return overall_key, stock_key, contributors_key
-    return (cache_plot(cache, overall_key, plot_overall_portfolio(df)),
-            cache_plot(cache, stock_key, plot_portfolio_stock_performance(df)),
-            cache_plot(cache, contributors_key, plot_portfolio_contributors(df)))
+    return (cache_plot(overall_key, lambda: plot_overall_portfolio(df)),
+            cache_plot(stock_key, lambda: plot_portfolio_stock_performance(df)),
+            cache_plot(contributors_key, lambda: plot_portfolio_contributors(df)))
     
 def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=True):
     rows = []
@@ -193,27 +186,6 @@ def plot_fundamentals(df: pd.DataFrame, stock: str) -> str:
     )
     return plot
 
-
-def make_portfolio_dataframe(df: pd.DataFrame, melt=False):
-    assert df is not None
-    #print(df)
-    df["date"] = pd.to_datetime(df["date"])
-    avg_profit_over_period = (
-        df.filter(items=["stock", "stock_profit"]).groupby("stock").mean()
-    )
-    avg_profit_over_period["contribution"] = [
-        "positive" if profit >= 0.0 else "negative"
-        for profit in avg_profit_over_period.stock_profit
-    ]
-    # dont want to override actual profit with average
-    avg_profit_over_period = avg_profit_over_period.drop("stock_profit", axis="columns")
-    df = df.merge(avg_profit_over_period, left_on="stock", right_index=True, how="inner")
-    # print(df)
-    if melt:
-        df = df.filter(items=["stock", "date", "stock_profit", "stock_worth", "contribution"])
-        melted_df = df.melt(id_vars=["date", "stock", "contribution"], var_name="field")
-        return melted_df
-    return df
 
 def plot_overall_portfolio(df, figure_size=(12, 4), line_size=1.5, date_text_size=7) -> p9.ggplot:
     """
@@ -743,7 +715,9 @@ def make_rsi_plot(stock: str, stock_df: pd.DataFrame):
         plt.xlim(left=timeline[200])
     except IndexError:
         print("WARNING: 200 datapoints not available - some momentum data not available")
+    plt.plot()
     fig = plt.gcf()
+    plt.close(fig)
     return fig
 
 
