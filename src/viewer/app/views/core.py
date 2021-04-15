@@ -26,10 +26,11 @@ def png(request, key):
     """
     assert request is not None # dont yet require user login for this endpoint, but maybe we should???
     try:
-        with cache.read(key) as reader:
-            response = HttpResponse(reader.read(), content_type="image/png")
-            response['X-Accel-Redirect'] = reader.name
-            return response
+        byte_value = cache.get(key)
+        assert isinstance(byte_value, bytes)
+        response = HttpResponse(byte_value, content_type="image/png")
+        #response['X-Accel-Redirect'] = reader.name
+        return response
     except KeyError:
         raise Http404('No such cached image: {}'.format(key))
 

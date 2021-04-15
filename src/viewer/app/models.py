@@ -528,19 +528,22 @@ def all_stocks(strict=True):
    
     return set(all_securities)
 
-def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=False, max_price=None):
+def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=False, max_price=None, field="change_in_percent"):
     """
     Return a dataframe with row index set to ASX ticker symbols and the only column set to 
-    the sum over all desired dates for percentage change in the stock price. A negative sum
-    implies a decrease, positive an increase in price over the observation period.
+    the sum over all desired dates for percentage change in the stock price (by default). A negative sum
+    implies a decrease, positive an increase in price over the observation period. Some fields are percentages, some AUD cents etc (it is up to the user to get it right)
     """
     assert threshold >= 0.0
-    # NB: missing values will be imputed here, for now.
-    cip = company_prices(all_stocks(), timeframe, fields="change_in_percent", missing_cb=None)
+    cip = company_prices(all_stocks(), timeframe, fields=field, missing_cb=None)
 
-    movements = cip.sum(axis=0)
+    if field == "change_in_percent":
+        movements = cip.sum(axis=0) 
+    else:
+        movements = cip.diff(periods=1, axis=0).fillna(0.0).sum(axis=0)
+    # FALLTHRU...
     results = movements[movements.abs() >= threshold]
-    print("Found {} movers before filtering: {} {}".format(len(results), increasing, decreasing))
+    print("Found {} movers (using {}) before filtering: {} {}".format(len(results), field, increasing, decreasing))
     if not increasing:
         results = results.drop(results[results > 0.0].index)
     if not decreasing:

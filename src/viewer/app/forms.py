@@ -28,7 +28,7 @@ class SectorSearchForm(forms.Form):
         ("Utilities", "Utilities"),
     )
     sector = forms.ChoiceField(choices=SECTOR_CHOICES, 
-                               required=True, 
+                               required=True,
                                validators=[is_not_blank, is_valid_sector])
     report_top_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
     report_bottom_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
@@ -45,6 +45,12 @@ class CompanySearchForm(forms.Form):
     activity = forms.CharField(required=False)
 
 class MoverSearchForm(forms.Form):
+    METRIC_CHOICES=(
+        ('change_in_percent', 'Price change in percent (%) terms'),
+        ('eps', 'Earnings per share (cents AUD)'),
+        ('annual_dividend_yield', 'Change in dividend yield (%)'),
+        ('pe', 'Price/Earnings ratio')
+    )
     threshold = forms.FloatField(required=True, min_value=0.0, max_value=10000.0, initial=50.0)
     timeframe_in_days = forms.IntegerField(required=True,
                                            min_value=1,
@@ -54,6 +60,7 @@ class MoverSearchForm(forms.Form):
     show_increasing = forms.BooleanField(required=False, initial=True, label="Increasing")
     show_decreasing = forms.BooleanField(required=False, initial=True, label="Decreasing")
     max_price = forms.FloatField(required=False, max_value=10000.0)
+    metric = forms.ChoiceField(required=True, choices=METRIC_CHOICES, initial="change_in_percent")
 
 class SectorSentimentSearchForm(forms.Form):
     normalisation_choices = (

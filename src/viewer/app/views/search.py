@@ -1,7 +1,6 @@
 """
 Responsible for implementing user search for finding companies of interest
 """
-import pandas as pd
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic.list import MultipleObjectTemplateResponseMixin
 from django.views.generic.edit import FormView
@@ -129,7 +128,7 @@ class MoverSearch(DividendYieldSearch):
   
     def additional_context(self, context):
         return {
-            "title": "Find companies exceeding threshold movement (%)",
+            "title": "Find companies exceeding threshold over timeframe",
             "sentiment_heatmap_title": "Heatmap for moving stocks"
         }
 
@@ -143,7 +142,8 @@ class MoverSearch(DividendYieldSearch):
             self.timeframe,
             kwargs.get("show_increasing", False),
             kwargs.get("show_decreasing", False),
-            kwargs.get("max_price", None)
+            kwargs.get("max_price", None),
+            field=kwargs.get('metric', 'change_in_percent'),
         )
         self.qs, _ = latest_quote(tuple(df.index))
         return self.qs

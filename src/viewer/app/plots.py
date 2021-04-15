@@ -13,6 +13,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
+from mizani.formatters import date_format
 from app.models import stocks_by_sector, Timeframe, valid_quotes_only, timing, selected_cached_stocks_cip
 from app.data import make_sector_performance_dataframe, make_stock_vs_sector_dataframe, make_portfolio_dataframe, cache_plot
 
@@ -723,10 +724,11 @@ def plot_trend(dataframe: pd.DataFrame, sample_period="M") -> str:
     dataframe = dataframe.transpose()
     dataframe.index = pd.to_datetime(dataframe.index, format='%Y-%m-%d')
     dataframe = dataframe.resample(sample_period).max()
-    print(dataframe.index)
+    #print(dataframe.index)
     plot = (
         p9.ggplot(dataframe, p9.aes(x="dataframe.index", y=dataframe.columns[0]))
         + p9.geom_bar(stat="identity", fill="#880000", alpha=0.5)
+        + p9.scale_x_datetime(labels=date_format('%Y-%m'))     # dont print day (always 1st day of month due to resampling)
         + p9.labs(x="", y="$AUD")
         + p9.theme(axis_text_x=p9.element_text(angle=30, size=7))
     )

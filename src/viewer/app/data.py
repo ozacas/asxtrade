@@ -20,7 +20,9 @@ def hash_str(key: str) -> str:
     assert isinstance(result, str)
     return result
 
-def cache_plot(key: str, plot_factory=None, debug=False, timeout=1.0*60, django_cache=None):
+check_hash_collision_dict:dict = {}
+
+def cache_plot(key: str, plot_factory=None, debug=True, timeout=1.0*60, django_cache=None):
     assert plot_factory is not None
     
     if django_cache is None:
@@ -28,6 +30,12 @@ def cache_plot(key: str, plot_factory=None, debug=False, timeout=1.0*60, django_
 
     # ensure all URLs are sha256 hexdigest's regardless of the key specified to avoid data leak and security from brute-forcing
     cache_key = hash_str(key)
+
+    if debug: # check for collisions?
+        if cache_key in check_hash_collision_dict and key != check_hash_collision_dict[cache_key]:
+            raise ValueError("*** HASH collision! expected {key} but found: {check_hash_collision_dict[cache_key]}")
+        elif cache_key not in check_hash_collision_dict:
+            check_hash_collision_dict[cache_key] = key
 
     # plot already done and in cache?
     if cache_key in django_cache:
@@ -46,10 +54,12 @@ def cache_plot(key: str, plot_factory=None, debug=False, timeout=1.0*60, django_
             except AttributeError:
                 fig = plot # matplotlib figures dont have gcf callable, so we use savefig directly for them
         fig.savefig(buf, format='png')
+        n_bytes = buf.seek(0, 1) # find out how many bytes have been written above by a "zero" seek
+        assert n_bytes > 0
         buf.seek(0)
         if debug:
-            print(f"Setting cache plot (timeout {timeout} sec.): {key} -> {cache_key}")
-        django_cache.set(cache_key, buf.read(), timeout=timeout, read=True) # no page should take 10 minutes to render so this should guarantee object exists when served...
+            print(f"Setting cache plot (timeout {timeout} sec.): {key} -> {cache_key} n_bytes={n_bytes}")
+        django_cache.set(cache_key, buf.read(n_bytes), timeout=timeout, read=True) # no page should take 10 minutes to render so this should guarantee object exists when served...
         plt.close(fig)
         return cache_key
 
