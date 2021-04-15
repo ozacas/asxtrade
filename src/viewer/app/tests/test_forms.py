@@ -11,7 +11,8 @@ from app.forms import (
     DividendSearchForm,
     CompanySearchForm,
 )
-
+from app.models import stocks_by_sector
+from app.tests.test_models import comp_deets # needed to ensure stocks_by_sector() doesnt fail an assertion
 
 def test_is_not_blank():
     with pytest.raises(ValidationError):
@@ -22,7 +23,8 @@ def test_is_not_blank():
 
 
 @pytest.mark.django_db # needs access to the database to validate sector name
-def test_is_valid_sector():
+def test_is_valid_sector(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
+    stocks_by_sector.cache_clear() # prevent cache pollution from ruining test
     for item1, item2 in SectorSearchForm.SECTOR_CHOICES:
         # the database is not populated so we cant check return value, check for an exception
         assert len(item1) == len(item2) and len(item1) > 0
@@ -30,7 +32,7 @@ def test_is_valid_sector():
 
 
 @pytest.mark.django_db
-def test_sector_search_form():
+def test_sector_search_form(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
     fm1 = SectorSearchForm(data={"sector": SectorSearchForm.SECTOR_CHOICES[0][1]})
     assert fm1.is_valid()
     fm2 = SectorSearchForm(data={})
