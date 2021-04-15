@@ -96,7 +96,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
     # plot the price over timeframe in monthly blocks
     prices = stock_df[['last_price']].transpose() # use list of columns to ensure pd.DataFrame not pd.Series
     prices = prices.filter(items=plot_timeframe.all_dates(), axis='columns') # drop any date in "warm up" period
-    monthly_maximum_plot = cache_plot(f"{timeframe.description}-{stock}-montly-maximum-plot", lambda: plot_trend(prices, sample_period='M'))
+    monthly_maximum_plot = cache_plot(f"{timeframe.description}-{stock}-monthly-maximum-plot", lambda: plot_trend(prices, sample_period='M'))
 
     # populate template and render HTML page with context
     context = {
