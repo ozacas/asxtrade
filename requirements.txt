@@ -3,7 +3,7 @@ diskcache
 Django >=3.0.5,<3.1
 django-menu
 django-debug-toolbar
-djongo == 1.3.3
+djongo == 1.3.4
 fastparquet
 matplotlib
 numpy

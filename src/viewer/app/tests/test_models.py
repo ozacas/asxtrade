@@ -12,6 +12,8 @@ from app.models import (
     validate_user,
     validate_date,
     all_available_dates,
+    selected_cached_stocks_cip,
+    cached_all_stocks_cip,
     desired_dates,
     stock_info,
     find_user,
@@ -297,6 +299,17 @@ def test_company_prices(quotation_fixture, monkeypatch):
     #                     fields=["last_price", "annual_dividend_yield", "pe", "eps"],
     #                     all_dates=expected_dates)
     #print(df3)
+
+# TODO FIXME: needs parquet mock for cached_all_stocks_cip to read
+# @pytest.mark.django_db
+# def test_selected_cached_stocks_cip(quotation_fixture):
+#     cached_all_stocks_cip.cache_clear() # ensure no caching of another test side-effecting this test
+#     cip = selected_cached_stocks_cip(['ABC', 'OTHER'], Timeframe(from_date='2021-01-01', to_date='2021-01-07'))
+#     assert isinstance(cip, pd.DataFrame)
+#     assert len(cip) == 2
+#     assert cip.columns[0] == '2021-01-01'
+#     assert cip.columns[1] == '2021-01-06' # note: fixture does not have data for 2021-01-07 so this must be the result
+#     print(cip)
 
 @pytest.mark.django_db
 def test_toggle_watchlist_entry(uw_fixture, django_user_model):

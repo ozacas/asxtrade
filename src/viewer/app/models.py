@@ -11,6 +11,9 @@ import django.db.models as model
 from django.conf import settings
 from django.forms.models import model_to_dict
 from django.contrib.auth import get_user_model
+from django.db.models.signals import post_save
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.dispatch import receiver
 from djongo.models import ObjectIdField, DjongoManager
 from djongo.models.json import JSONField
 from django.http import Http404
@@ -935,3 +938,20 @@ def user_purchases(user):
         purchases[code].append(purchase)
     #print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
+
+
+
+class Profile(model.Model):
+    """User profile model for defaults for various analyses and visualisations"""
+    user = model.OneToOneField(get_user_model(), on_delete=model.CASCADE)
+    timeframe_in_days = model.IntegerField(validators=[MinValueValidator(10), MaxValueValidator(100000)], default=180) # for plots/analyses were default is permissable
+    line_size = model.FloatField(validators=[MinValueValidator(0.5), MaxValueValidator(10.0)], default=1.5) # for line based plots
+
+@receiver(post_save, sender=get_user_model())
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        Profile.objects.create(user=instance)
+
+@receiver(post_save, sender=get_user_model())
+def save_user_profile(sender, instance, **kwargs):
+    instance.profile.save()
