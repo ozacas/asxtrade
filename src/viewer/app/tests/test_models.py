@@ -12,8 +12,8 @@ from app.models import (
     validate_user,
     validate_date,
     all_available_dates,
-    selected_cached_stocks_cip,
-    cached_all_stocks_cip,
+ #   selected_cached_stocks_cip,
+ #   cached_all_stocks_cip,
     desired_dates,
     stock_info,
     find_user,
@@ -148,7 +148,7 @@ def uw_fixture(django_user_model):
     assert u2.is_active and not u1.is_active
 
 @pytest.mark.django_db
-def test_user_watchlist(uw_fixture, django_user_model):
+def test_user_watchlist(uw_fixture, django_user_model): # pylint: disable=unused-argument,redefined-outer-name
     u1 = django_user_model.objects.get(username='U1')
     assert user_watchlist(u1) == set(['ASX1'])
     u2 = django_user_model.objects.get(username='u2')
@@ -160,7 +160,7 @@ def test_validate_sector(company_details):
     validate_sector('Financials') # must not raise exception
 
 @pytest.mark.django_db
-def test_validate_user(uw_fixture, django_user_model):
+def test_validate_user(uw_fixture, django_user_model): # pylint: disable=unused-argument,redefined-outer-name
     u1 = django_user_model.objects.get(username='U1')
     # since u1 is not active...
     with pytest.raises(AssertionError):
@@ -189,7 +189,7 @@ def comp_deets(company_details_factory, security_factory):
     security_factory.create(asx_code='ANZ')
 
 @pytest.mark.django_db
-def test_stock_info(comp_deets):
+def test_stock_info(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
     d = stock_info('ANZ')
     assert isinstance(d, dict)
 
@@ -270,7 +270,7 @@ def mock_superdf_many_fields(*args, **kwargs):
         return df
 
 @pytest.mark.django_db
-def test_company_prices(quotation_fixture, monkeypatch):
+def test_company_prices(quotation_fixture, monkeypatch): # pylint: disable=unused-argument,redefined-outer-name
     #expected_dates = ['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04', '2021-01-05', '2021-01-06']
     monkeypatch.setattr(mdl, 'make_superdf', mock_superdf_all_stocks)
 
@@ -325,7 +325,7 @@ def test_toggle_watchlist_entry(uw_fixture, django_user_model): # pylint: disabl
     assert 'ASX2' in ret
 
 @pytest.mark.django_db
-def test_user_purchases(uw_fixture, purchase_factory, quotation_factory, monkeypatch):
+def test_user_purchases(uw_fixture, purchase_factory, quotation_factory, monkeypatch): # pylint: disable=unused-argument,redefined-outer-name
     def mock_latest_quote(stock):
         assert stock == "ASX1"
         return quotation_factory.create(asx_code='ASX1', last_price=2.0), '2021-01-01'
@@ -348,7 +348,7 @@ def test_user_purchases(uw_fixture, purchase_factory, quotation_factory, monkeyp
     assert str(result) == "Purchase on 2021-01-01: $5000.0 (5000 shares@$1.00) is now $10000.00 (100.00%)"
 
 @pytest.mark.django_db
-def test_find_movers(quotation_fixture, monkeypatch):
+def test_find_movers(quotation_fixture, monkeypatch): # pylint: disable=unused-argument,redefined-outer-name
     def mock_all_stocks(): # to correspond to fixture data
         return set(['ABC', 'OTHER'])
 
@@ -374,14 +374,14 @@ def test_find_movers(quotation_fixture, monkeypatch):
     assert results.loc['ABC'] == 60.0
 
 @pytest.mark.django_db
-def test_companies_with_same_sector(comp_deets):
+def test_companies_with_same_sector(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
     result = companies_with_same_sector('ANZ')
     assert isinstance(result, set)
     assert result == set(['ANZ'])
     
 @pytest.mark.django_db
-def test_find_named_companies(quotation_fixture, monkeypatch):
-    def mock_quot_date(*args, **kwargs):
+def test_find_named_companies(quotation_fixture, monkeypatch): # pylint: disable=unused-argument,redefined-outer-name
+    def mock_quot_date(*args, **kwargs): # pylint: disable=unused-argument
         return '2021-01-01'
 
     monkeypatch.setattr(mdl, 'latest_quotation_date', mock_quot_date)
@@ -389,15 +389,15 @@ def test_find_named_companies(quotation_fixture, monkeypatch):
     assert result == set()
 
 @pytest.mark.django_db
-def test_latest_quote(quotation_fixture, monkeypatch):
-    def mock_quot_date(*args, **kwargs):
+def test_latest_quote(quotation_fixture, monkeypatch): # pylint: disable=unused-argument,redefined-outer-name
+    def mock_quot_date(*args, **kwargs): # pylint: disable=unused-argument
         return '2021-01-01' # to get 2 quotes, we have to lie and say the latest is Jan 1
 
     quote, quote_date = latest_quote('ABC')
     assert isinstance(quote, Quotation)
     assert quote_date == '2021-01-06'
     monkeypatch.setattr(mdl, 'latest_quotation_date', mock_quot_date)
-    qs, latest_date = latest_quote(['ABC', 'OTHER'])
+    qs, latest_date = latest_quote(['ABC', 'OTHER']) # pylint: disable=unused-variable
     assert isinstance(qs, QuerySet)
     assert qs.count() == 2
 
@@ -434,7 +434,7 @@ def test_timeframe(data, expected):
     validate_date(tf.most_recent_date)
 
 @pytest.mark.django_db
-def test_day_low_high(quotation_fixture):
+def test_day_low_high(quotation_fixture): # pylint: disable=unused-argument,redefined-outer-name
     # NB: dates and stock must correspond to quotation_fixture
     df = day_low_high('ABC', all_dates=['2021-01-01', '2021-01-02', '2021-01-03'])
     assert set(df.columns) == set(['day_low_price', 'day_high_price', 'last_price', 'volume', 'date'])
