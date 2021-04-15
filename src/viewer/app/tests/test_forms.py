@@ -41,7 +41,7 @@ def test_sector_search_form(comp_deets): # pylint: disable=unused-argument,redef
 def test_mover_search_form():
     fm1 = MoverSearchForm(data={})
     assert not fm1.is_valid()
-    fm2 = MoverSearchForm(data={'threshold': 50.0, 'timeframe_in_days': 10})
+    fm2 = MoverSearchForm(data={'threshold': 50.0, 'timeframe_in_days': 10, 'metric': 'change_in_percent'})
     assert fm2.is_valid()
 
 def test_dividend_search_form():
