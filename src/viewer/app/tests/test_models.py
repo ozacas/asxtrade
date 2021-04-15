@@ -87,7 +87,7 @@ def crafted_quotation_fixture(quotation_factory):
 
 
 @pytest.mark.django_db
-def test_valid_quotes_only(crafted_quotation_fixture):
+def test_valid_quotes_only(crafted_quotation_fixture): # pylint: disable=unused-argument,redefined-outer-name
     result = valid_quotes_only('2021-01-01')
     assert result is not None
     assert len(result) == 1
@@ -122,7 +122,7 @@ def all_sector_fixture(company_details_factory):
     company_details_factory.create()
 
 @pytest.mark.django_db
-def test_all_sectors(all_sector_fixture): # pylint: disable=unused-argument,redefine-outer-name
+def test_all_sectors(all_sector_fixture): # pylint: disable=unused-argument,redefined-outer-name
     # since company_details_factory gives a single ANZ company details record, this test will work...
     ret = all_sectors()
     #print(ret)
@@ -170,14 +170,14 @@ def test_validate_user(uw_fixture, django_user_model):
     validate_user(u2)
 
 @pytest.mark.django_db
-def test_in_watchlist(uw_fixture):
+def test_in_watchlist(uw_fixture): # pylint: disable=unused-argument,redefined-outer-name
     find_user.cache_clear()
     assert is_in_watchlist('U1', 'ASX1')
     assert not is_in_watchlist('u2', 'ASX1')
 
 
 @pytest.mark.django_db
-def test_all_available_dates(crafted_quotation_fixture):
+def test_all_available_dates(crafted_quotation_fixture): # pylint: disable=unused-argument,redefined-outer-name
     assert all_available_dates() == ['2021-01-01']
     assert all_available_dates(reference_stock='ASX1') == []
 
@@ -201,7 +201,7 @@ def test_stock_info(comp_deets):
     assert d2['asx_isin_code'] == 'ISIN000001'
    
 @pytest.mark.django_db
-def test_stocks_by_sector(comp_deets):
+def test_stocks_by_sector(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
     df = stocks_by_sector()
     assert df is not None
     assert isinstance(df, pd.DataFrame)
@@ -312,7 +312,7 @@ def test_company_prices(quotation_fixture, monkeypatch):
 #     print(cip)
 
 @pytest.mark.django_db
-def test_toggle_watchlist_entry(uw_fixture, django_user_model):
+def test_toggle_watchlist_entry(uw_fixture, django_user_model): # pylint: disable=unused-argument,redefined-outer-name
     u = find_user('u2')
     assert u is not None
     uname = u.username

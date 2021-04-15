@@ -12,7 +12,7 @@ from app.forms import (
     CompanySearchForm,
 )
 from app.models import stocks_by_sector
-from app.tests.test_models import comp_deets # needed to ensure stocks_by_sector() doesnt fail an assertion
+from app.tests.test_models import comp_deets # needed to ensure stocks_by_sector() doesnt fail an assertion. pylint: disable=unused-import
 
 def test_is_not_blank():
     with pytest.raises(ValidationError):
