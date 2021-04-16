@@ -19,8 +19,8 @@ from app.data import make_sector_performance_dataframe, make_stock_vs_sector_dat
 
 def price_change_bins():
     """
-    Return the bins and their label as a tuple for heatmap_market() to use and the
-    plotting code
+    Return the change_in_percent bins and their label as a tuple for heatmap_market() to use and the
+    plotting code. These are non-uniform bins, designed to be fairly sensitive to major market moves.
     """
     bins = [
         -1000.0,
@@ -47,18 +47,19 @@ def price_change_bins():
 
 def cached_heatmap(asx_codes: Iterable[str], timeframe: Timeframe, df: pd.DataFrame=None) -> str:
     key = "-".join(asx_codes) + timeframe.description + "-stocks-sentiment"
-    if df is None:
-        df = selected_cached_stocks_cip(asx_codes, timeframe)
-    return cache_plot(key, lambda: plot_heatmap(df, timeframe))
+    def inner(asx_codes, timeframe, df):
+        if df is None:
+            df = selected_cached_stocks_cip(asx_codes, timeframe)
+        return plot_heatmap(df, timeframe)
+    return cache_plot(key, lambda: inner(asx_codes, timeframe, df))
 
 def cached_breakdown(asx_codes, timeframe: Timeframe, df: pd.DataFrame=None):
     key = "-".join(asx_codes)+"-breakdown"
-    if df is None:
-        df = selected_cached_stocks_cip(asx_codes, timeframe)
-    return cache_plot(key, lambda: plot_breakdown(df))
-
-def cached_company_rank(df: pd.DataFrame, cache_key: str) -> str:
-    return cache_plot(cache_key, lambda: plot_company_rank(df))    
+    def inner(asx_codes, timeframe, df):
+        if df is None:
+            df = selected_cached_stocks_cip(asx_codes, timeframe)
+        return plot_breakdown(df)
+    return cache_plot(key, lambda: inner(asx_codes, timeframe, df))
 
 def cached_company_versus_sector(stock: str, sector: str, sector_companies, cip: pd.DataFrame) -> str:
     cache_key = f"{stock}-{sector}-company-versus-sector"
@@ -110,26 +111,8 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
 
     df = pd.DataFrame.from_records(rows)
     # print(df['bin'].unique())
-    # HACK TODO FIXME: should get from price_change_bins()...
-    order = [
-        "-1000.0",
-        "-100.0",
-        "-10.0",
-        "-5.0",
-        "-3.0",
-        "-2.0",
-        "-1.0",
-        "-1e-06",
-        "1e-06",
-        "1.0",
-        "2.0",
-        "3.0",
-        "5.0",
-        "10.0",
-        "25.0",
-        "100.0",
-        "1000.0",
-    ]
+    bins, labels = price_change_bins() # pylint: disable=unused-variable
+    order = filter(lambda s: s != "0.0", labels)  # dont show the no change bin since it dominates the activity heatmap
     df["bin_ordered"] = pd.Categorical(df["bin"], categories=order)
 
     plot = (
@@ -137,7 +120,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
         + p9.geom_tile(show_legend=False)
         + p9.theme_bw()
         + p9.xlab("")
-        + p9.ylab("Percentage daily change")
+        + p9.ylab("Daily change (%)")
         + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), figure_size=(10, 5))
     )
     if plot_text_labels:
@@ -168,6 +151,7 @@ def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str: # pyl
         + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), 
                    axis_text_y=p9.element_text(size=7),
                    figure_size=(8, n))
+        + p9.scale_color_cmap_d()
         #    + p9.aes(ymin=0)
         + p9.xlab("")
         + p9.ylab("")
@@ -191,6 +175,7 @@ def plot_overall_portfolio(df, figure_size=(12, 4), line_size=1.5, date_text_siz
         + p9.labs(x="", y="$ AUD")
         + p9.geom_line(size=line_size)
         + p9.facet_wrap("~ field", nrow=3, ncol=1, scales="free_y")
+        + p9.scale_colour_cmap_d()
         + p9.theme(
             axis_text_x=p9.element_text(angle=30, size=date_text_size),
             figure_size=figure_size,
@@ -213,6 +198,7 @@ def plot_portfolio_contributors(df: pd.DataFrame, figure_size=(11,5)) -> p9.ggpl
     plot = (
         p9.ggplot(df, p9.aes("stock", "value", fill="stock"))
         + p9.geom_bar(stat="identity")
+        + p9.scale_colour_cmap_d()
         + p9.labs(x="", y="$ AUD")
         + p9.facet_grid("contribution ~ field", scales="free_y")
         + p9.theme(legend_position="none", figure_size=figure_size)
@@ -220,12 +206,31 @@ def plot_portfolio_contributors(df: pd.DataFrame, figure_size=(11,5)) -> p9.ggpl
     return plot
 
 def plot_portfolio_stock_performance(df: pd.DataFrame, figure_size=(11,5), date_text_size=7) -> p9.ggplot:
+    def inner(pos_or_neg_val: float) -> float:
+        val = abs(pos_or_neg_val)
+        if val > 10000.0: # TODO FIXME: these numbers dont take into account the total portfolio cost... or purchase size
+            return 1.0
+        elif val > 3000.0:
+            return 0.7
+        elif val < 500.0: # stocks which a breakeven are very transparent
+            return 0.2
+        else:
+            return 0.5
+
+    latest_date = df.iloc[-1, 6]
+    latest_profit = df[df['date'] == latest_date]
+    alpha_by_stock = defaultdict(float)
+    for row in latest_profit.itertuples():
+        alpha_by_stock[row.stock] = inner(row.stock_profit)
+
     melted_df = make_portfolio_dataframe(df, melt=True)
+    melted_df['alpha'] = melted_df['stock'].apply(lambda stock: alpha_by_stock.get(stock, 1.0))
     plot = (
         p9.ggplot(melted_df, p9.aes("date", "value", group="stock", colour="stock"))
         + p9.xlab("")
-        + p9.geom_line(size=1.0)
+        + p9.geom_line(p9.aes(alpha='alpha'), size=1.0)
         + p9.facet_grid("field ~ contribution", scales="free_y")
+        + p9.scale_colour_cmap_d()
         + p9.theme(
             axis_text_x=p9.element_text(angle=30, size=date_text_size),
             figure_size=figure_size,
@@ -269,7 +274,7 @@ def plot_company_versus_sector(df: pd.DataFrame, stock: str, sector: str) -> str
         )
         + p9.geom_line(size=1.5)
         + p9.xlab("")
-        + p9.ylab("Percentage change since start")
+        + p9.ylab("Change since start (%)")
         + p9.theme(
             axis_text_x=p9.element_text(angle=30, size=7),
             figure_size=(8, 4),
@@ -321,12 +326,13 @@ def plot_market_wide_sector_performance(all_stocks_cip: pd.DataFrame):
         p9.ggplot(
             grouped_df, p9.aes("date", "cumulative_change_percent", color="sector")
         )
-        + p9.geom_line(size=1.0)
+        + p9.geom_line(size=1.5)
         + p9.facet_wrap(
             "~sector", nrow=n_unique_sectors // n_col + 1, ncol=n_col, scales="free_y"
         )
         + p9.xlab("")
         + p9.ylab("Average sector change (%)")
+        + p9.scale_colour_cmap_d()
         + p9.theme(
             axis_text_x=p9.element_text(angle=30, size=6),
             axis_text_y=p9.element_text(size=6),
@@ -744,7 +750,7 @@ def plot_points_by_rule(cache_key: str, net_points_by_rule: defaultdict(int)) ->
         return (
             p9.ggplot(df, p9.aes(x="rule", y="net_points"))
             + p9.labs(x="Rule", y="Contribution to points by rule")
-            + p9.geom_bar(stat="identity")
+            + p9.geom_bar(stat="identity", fill="#880000", alpha=0.5)
             + p9.theme(axis_text_y=p9.element_text(size=7), subplots_adjust={"left": 0.2})
             + p9.coord_flip()
         )

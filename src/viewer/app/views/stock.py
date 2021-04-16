@@ -14,8 +14,8 @@ from app.analysis import (default_point_score_rules, rank_cumulative_change,
                         calculate_trends)
 from app.messages import warning
 from app.data import cache_plot, make_point_score_dataframe
-from app.plots import (plot_point_scores, plot_points_by_rule, plot_fundamentals, make_rsi_plot, plot_trend, 
-                        cached_portfolio_performance, cached_company_rank, cached_sector_performance, cached_company_versus_sector)
+from app.plots import (plot_point_scores, plot_points_by_rule, plot_fundamentals, make_rsi_plot, plot_trend, plot_company_rank,
+                        cached_portfolio_performance, cached_sector_performance, cached_company_versus_sector)
 
 
 @timing
@@ -139,7 +139,7 @@ def show_trends(request):
     # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
     cip = rank_cumulative_change(cip.filter(trends.keys(), axis="index"), timeframe)
     #print(cip)
-    trending_companies_plot = cached_company_rank(cip, f"{request.user.username}-watchlist-trends")
+    trending_companies_plot = cache_plot(f"{request.user.username}-watchlist-trends", lambda: plot_company_rank(cip))
 
     context = {
         "watchlist_trends": trends,
