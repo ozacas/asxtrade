@@ -22,7 +22,7 @@ def hash_str(key: str) -> str:
 
 check_hash_collision_dict:dict = {}
 
-def cache_plot(key: str, plot_factory=None, debug=True, timeout=1.0*60, django_cache=None):
+def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django_cache=None):
     assert plot_factory is not None
     
     if django_cache is None:

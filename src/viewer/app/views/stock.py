@@ -71,6 +71,17 @@ def make_fundamentals(timeframe: Timeframe, stock: str):
         #print(df)
         df['change_in_percent_cumulative'] = df['change_in_percent'].cumsum() # nicer to display cumulative
         df = df.drop('change_in_percent', axis=1)
+        df["volume"] = df["last_price"] * df["volume"] / 1000000  # again, express as $(M)
+        df["market_cap"] /= 1000 * 1000
+        df["number_of_shares"] /= 1000 * 1000
+        df['fetch_date'] = pd.to_datetime(df.index, format="%Y-%m-%d")
+        #print(df.shape)
+        df = df.set_index('fetch_date')
+        df = df.resample('B').asfreq() # fill gaps in dataframe with business day dates only
+        #with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+        #    print(df)
+        df['fetch_date'] = pd.to_datetime(df.index, format='%Y-%m-%d')
+        #print(df.shape)
         return plot_fundamentals(df, stock)
 
     return {

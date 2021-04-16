@@ -152,10 +152,6 @@ def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str: # pyl
     for column in columns_to_report:
         assert column in colnames
    
-    df["volume"] = df["last_price"] * df["volume"] / 1000000  # again, express as $(M)
-    df["market_cap"] /= 1000 * 1000
-    df["number_of_shares"] /= 1000 * 1000
-    df["fetch_date"] = pd.to_datetime(df.index, format='%Y-%m-%d')
     plot_df = pd.melt(
         df,
         id_vars="fetch_date",
@@ -163,12 +159,12 @@ def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str: # pyl
         var_name="indicator",
         value_name="value",
     )
-    plot_df = plot_df.dropna(axis=0, subset=['value']) # remove NA from any fundamental metric to avoid warning from geom_path()
+    #plot_df = plot_df.dropna(axis=0, subset=['value']) # remove NA from any fundamental metric to avoid warning from geom_path()
     plot_df["value"] = pd.to_numeric(plot_df["value"])
     n = len(columns_to_report)
     plot = (
-        p9.ggplot(plot_df, p9.aes("fetch_date", "value", color="indicator"))
-        + p9.geom_line(show_legend=False, size=line_size)
+        p9.ggplot(plot_df, p9.aes("fetch_date", "value", group="indicator", colour='indicator'))
+        + p9.geom_path(show_legend=False, size=line_size)
         + p9.facet_wrap("~ indicator", nrow=n, ncol=1, scales="free_y")
         + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), 
                    axis_text_y=p9.element_text(size=7),
@@ -643,16 +639,7 @@ def make_rsi_plot(stock: str, stock_df: pd.DataFrame):
     (linema200,) = ax2.plot(timeline, ma200, color="red", lw=2, label="MA (200)")
     assert linema20 is not None
     assert linema200 is not None
-
-    # last = dataframe[-1]
-    # s = '%s O:%1.2f H:%1.2f L:%1.2f C:%1.2f, V:%1.1fM Chg:%+1.2f' % (
-    #    today.strftime('%d-%b-%Y'),
-    #    last.open, last.high,
-    #    last.low, last.close,
-    #    last.volume*1e-6,
-    #    last.close - last.open)
-    # t4 = ax2.text(0.3, 0.9, s, transform=ax2.transAxes, fontsize=textsize)
-
+   
     props = font_manager.FontProperties(size=10)
     leg = ax2.legend(loc="center left", shadow=True, fancybox=True, prop=props)
     leg.get_frame().set_alpha(0.5)
