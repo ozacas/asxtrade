@@ -4,7 +4,7 @@ base64 data for various django templates to use.
 """
 import base64
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from typing import Iterable
 import numpy as np
@@ -705,6 +705,13 @@ def plot_trend(dataframe: pd.DataFrame, sample_period="M") -> str:
     Given a dataframe of a single stock from company_prices() this plots the highest price
     in each month over the time period of the dataframe.
     """
+    def inner_date_fmt(dates_to_format):
+        results = []
+        for d in dates_to_format:
+            d -= timedelta(weeks=4) # breaks are set to the end of the month rather than the start... so
+            results.append(d.strftime("%Y-%m"))
+        return results
+
     assert dataframe is not None
 
     dataframe = dataframe.transpose()
@@ -714,7 +721,7 @@ def plot_trend(dataframe: pd.DataFrame, sample_period="M") -> str:
     plot = (
         p9.ggplot(dataframe, p9.aes(x="dataframe.index", y=dataframe.columns[0]))
         + p9.geom_bar(stat="identity", fill="#880000", alpha=0.5)
-        + p9.scale_x_datetime(labels=date_format('%Y-%m'))     # dont print day (always 1st day of month due to resampling)
+        + p9.scale_x_datetime(labels=inner_date_fmt)     # dont print day (always 1st day of month due to resampling)
         + p9.labs(x="", y="$AUD")
         + p9.theme(axis_text_x=p9.element_text(angle=30, size=7))
     )
