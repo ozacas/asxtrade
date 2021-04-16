@@ -159,7 +159,6 @@ def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str: # pyl
         var_name="indicator",
         value_name="value",
     )
-    #plot_df = plot_df.dropna(axis=0, subset=['value']) # remove NA from any fundamental metric to avoid warning from geom_path()
     plot_df["value"] = pd.to_numeric(plot_df["value"])
     n = len(columns_to_report)
     plot = (
