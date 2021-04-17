@@ -5,7 +5,7 @@ on various pages for the user
 import tempfile
 from django.http import HttpResponse, Http404
 from django.contrib.auth.decorators import login_required
-from app.models import cached_all_stocks_cip, Timeframe, validate_user, user_watchlist, all_etfs
+from app.models import cached_all_stocks_cip, Timeframe, validate_user, user_watchlist, all_etfs, all_sector_stocks, Sector
 from app.data import make_kmeans_cluster_dataframe
 
 
@@ -43,6 +43,15 @@ def get_dataset(dataset_wanted, request):
     elif dataset_wanted == "kmeans-etfs":
         timeframe = Timeframe(past_n_days=300)
         _, _, _, _, df = make_kmeans_cluster_dataframe(timeframe, 7, all_etfs())
+        return df
+    elif dataset_wanted.startswith("kmeans-sector-"):
+        sector_id = int(dataset_wanted[14:])
+        sector = Sector.objects.get(sector_id=sector_id)
+        if sector is None or sector.sector_name is None:
+            raise Http404("No stocks associated with sector")
+        asx_codes = all_sector_stocks(sector.sector_name)
+        timeframe = Timeframe(past_n_days=300)
+        _, _, _, _, df = make_kmeans_cluster_dataframe(timeframe, 7, asx_codes)
         return df
     else:
         raise ValueError("Unsupported dataset {}".format(dataset_wanted))

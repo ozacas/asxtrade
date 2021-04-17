@@ -120,6 +120,9 @@
                     {% if '/show/etfs' in request.path %}
                     &nbsp;<a href="/cluster/kmeans/etfs" class="btn btn-primary">Cluster ETFs</a>
                     {% endif %}
+                    {%if '/search/by-sector' in request.path %}
+                    &nbsp;<a href="/cluster/kmeans/sector-{{ sector_id }}" class="btn btn-primary">Cluster sector stocks</a>
+                    {% endif %}
                 {% endif %}
                 </span>
             </td></tr>

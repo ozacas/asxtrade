@@ -232,12 +232,15 @@ def make_point_score_dataframe(stock: str, sector_companies: Iterable[str], cip:
 
 def make_kmeans_cluster_dataframe(timeframe: Timeframe, chosen_k: int, stocks: Iterable[str]) -> tuple:
     prices_df = company_prices(stocks, timeframe, fields="last_price")
-    #print(prices_df)
+    #with pd.option_context('display.max_rows', None, 'display.max_columns', None): 
+    #    print(prices_df)
     s1 = prices_df.pct_change().mean() * 252
     s2 = prices_df.pct_change().std() * math.sqrt(252.0)
     #print(s1)
     data_df = pd.DataFrame.from_dict({'return': s1, 'volatility': s2 })
-    #print(data_df)
+    #with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+    #    print(data_df)
+    data_df = data_df.dropna() # calculation may produce inf/nan so purge now...
     data = np.asarray([np.asarray(data_df['return']), np.asarray(data_df['volatility'])]).T
     distortion = []
     for k in range(2, 20):

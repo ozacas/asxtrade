@@ -1,7 +1,7 @@
 from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from app.models import (user_watchlist, validate_user, Timeframe, validate_stock, toggle_watchlist_entry, all_etfs)
+from app.models import (user_watchlist, validate_user, Timeframe, validate_stock, toggle_watchlist_entry, all_etfs, Sector, all_sector_stocks)
 from app.data import cache_plot, make_kmeans_cluster_dataframe
 from app.views.core import show_companies
 import pandas as pd
@@ -35,6 +35,12 @@ def cluster_stocks_view(request, stocks: str):
         asx_codes = user_watchlist(request.user)
     elif stocks == "etfs":
         asx_codes = all_etfs()
+    elif stocks.startswith("sector-"):
+        sector_id = int(stocks[7:])
+        sector = Sector.objects.get(sector_id=sector_id)
+        if sector is None or sector.sector_name is None:
+            raise Http404("No stocks associated with sector")
+        asx_codes = all_sector_stocks(sector.sector_name)
     else:
         raise Http404('Unknown stock list {}'.format(stocks))
     chosen_k = 7 # often a reasonable tradeoff
@@ -55,8 +61,7 @@ def cluster_stocks_view(request, stocks: str):
                 + p9.labs(x='Returns (%)', y='Volatility (%)')
                 + p9.facet_wrap('~cluster_id', ncol=3, scales="free")
                 + p9.theme(subplots_adjust={'hspace': 0.15, 'wspace': 0.15}, 
-                           axis_text_x=p9.element_text(size=8
-                           ), 
+                           axis_text_x=p9.element_text(size=8),
                            axis_text_y=p9.element_text(size=8),
                            figure_size=(15,15))
         )
