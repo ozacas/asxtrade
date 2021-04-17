@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <h3 class="mt-4">Stock clustering using k-Means</h3>
+
+    <ul>
+        <li>A total of {{ n_stocks }} stocks are clustered below</li>
+        <li>K={{ k }} was chosen to perform the clustering: each cluster (ie. colours) is shown in its own plot</li>
+        <li>Standard deviation of change-in-price (as a percentage) is used as the source of volatility data</li>
+        <li>Assumption of 252 trading days per year (annualised returns/volatility)</li>
+        <li>Timeframe for data used: {{ timeframe.description }}</li>
+    </ul>
+
+</div>
+
+<div class="row">
+    <h3>Elbow curve</h3>
+    <img src="/png/{{ elbow_curve_plot_uri }}" alt="Elbow curve selection of k plot" />
+
+</div>
+
+<div class="row">
+    <h3>K-means clustering</h3>
+
+    <img src="/png/{{ cluster_plot_uri }}" alt="k-means clustering plot" />
+
+    <table>
+        <tr><td><a href="/data/kmeans-{{ dataset }}/csv" class="btn btn-primary">Download cluster CSV</a></td></tr>
+    </table>
+</div>
+{% endblock %}

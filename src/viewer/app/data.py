@@ -7,12 +7,15 @@ from datetime import datetime
 import io
 import hashlib
 from typing import Iterable
+import math
 import numpy as np
 import pandas as pd
 from app.models import companies_with_same_sector, day_low_high, Timeframe, company_prices, validate_date, VirtualPurchase
 from django.core.cache import cache
 import plotnine as p9
 import matplotlib.pyplot as plt
+from scipy.cluster.vq import kmeans,vq
+from sklearn.cluster import KMeans
 
 
 def hash_str(key: str) -> str:
@@ -226,3 +229,24 @@ def make_point_score_dataframe(stock: str, sector_companies: Iterable[str], cip:
     df = pd.DataFrame.from_records(rows)
     df["date"] = pd.to_datetime(df["date"])
     return df, net_points_by_rule
+
+def make_kmeans_cluster_dataframe(timeframe: Timeframe, chosen_k: int, stocks: Iterable[str]) -> tuple:
+    prices_df = company_prices(stocks, timeframe, fields="last_price")
+    #print(prices_df)
+    s1 = prices_df.pct_change().mean() * 252
+    s2 = prices_df.pct_change().std() * math.sqrt(252.0)
+    #print(s1)
+    data_df = pd.DataFrame.from_dict({'return': s1, 'volatility': s2 })
+    #print(data_df)
+    data = np.asarray([np.asarray(data_df['return']), np.asarray(data_df['volatility'])]).T
+    distortion = []
+    for k in range(2, 20):
+        k_means = KMeans(n_clusters=k)
+        k_means.fit(data)
+        distortion.append(k_means.inertia_)
+    # computing K-Means with K = 5 (5 clusters)
+    centroids,_ = kmeans(data, chosen_k)
+    # assign each sample to a cluster
+    idx,_ = vq(data, centroids)
+    data_df["cluster_id"] = idx
+    return distortion, chosen_k, centroids, idx, data_df

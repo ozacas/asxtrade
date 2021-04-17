@@ -117,6 +117,9 @@
                     {% if '/show/watched' in request.path %}
                     &nbsp;<a href="/cluster/kmeans/watchlist" class="btn btn-primary">Cluster stocks</a>
                     {% endif %}
+                    {% if '/show/etfs' in request.path %}
+                    &nbsp;<a href="/cluster/kmeans/etfs" class="btn btn-primary">Cluster ETFs</a>
+                    {% endif %}
                 {% endif %}
                 </span>
             </td></tr>
