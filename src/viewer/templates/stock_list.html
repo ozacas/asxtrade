@@ -91,11 +91,6 @@
                 </span>
             </td></tr>
             <tr><td align="center">
-                {% if virtual_purchases %}
-                <span>
-                    &nbsp;<a href="/show/trends" class="btn btn-primary">Trends</a>&nbsp;<a href="/show/purchase-performance" class="btn btn-primary">Purchase performance</a>
-                </span>
-                {% endif %}
                 {% if '/show/outliers' not in request.path %}
                 <span>
                     {% if '/show/watched' in request.path %}
@@ -111,6 +106,19 @@
                     {% endif %}
                 </span>
                 {% endif %}
+            </td></tr>
+            <tr>
+                <td align="center"><span>
+                {% if '/show/outliers' not in request.path %}
+                    {% if virtual_purchases %}
+                    &nbsp;<a href="/show/trends" class="btn btn-primary">Trends</a>
+                    &nbsp;<a href="/show/purchase-performance" class="btn btn-primary">Purchase performance</a>
+                    {% endif %}
+                    {% if '/show/watched' in request.path %}
+                    &nbsp;<a href="/cluster/kmeans/watchlist" class="btn btn-primary">Cluster stocks</a>
+                    {% endif %}
+                {% endif %}
+                </span>
             </td></tr>
         </table>
     </div>

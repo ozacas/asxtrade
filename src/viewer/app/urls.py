@@ -66,6 +66,7 @@ urlpatterns = [
         name="show-optimised-sector",
     ),
     path("show/optimized/etfs/", optimised_etf_view, name="show-optimised-etfs"),
+    path("cluster/kmeans/<str:stocks>", cluster_stocks_view, name="cluster-stocks-view")
 
 ]
 

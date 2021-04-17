@@ -46,21 +46,9 @@ def price_change_bins():
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
 
-def cached_heatmap(asx_codes: Iterable[str], timeframe: Timeframe, df: pd.DataFrame=None) -> str:
-    key = "-".join(asx_codes) + timeframe.description + "-stocks-sentiment"
-    def inner(asx_codes, timeframe, df):
-        if df is None:
-            df = selected_cached_stocks_cip(asx_codes, timeframe)
-        return plot_heatmap(df, timeframe)
-    return cache_plot(key, lambda: inner(asx_codes, timeframe, df))
-
-def cached_breakdown(asx_codes, timeframe: Timeframe, df: pd.DataFrame=None):
-    key = "-".join(asx_codes)+"-breakdown"
-    def inner(asx_codes, timeframe, df):
-        if df is None:
-            df = selected_cached_stocks_cip(asx_codes, timeframe)
-        return plot_breakdown(df)
-    return cache_plot(key, lambda: inner(asx_codes, timeframe, df))
+def cached_heatmap(asx_codes: Iterable[str], timeframe: Timeframe, data_factory: Callable[[], pd.DataFrame]) -> str:
+    key = "-".join(asx_codes) + "-" + timeframe.description + "-stocks-sentiment-plot"
+    return cache_plot(key, lambda: plot_heatmap(data_factory, timeframe))
 
 def cached_company_versus_sector(stock: str, sector: str, sector_companies, cip: pd.DataFrame) -> str:
     cache_key = f"{stock}-{sector}-company-versus-sector"
@@ -441,8 +429,10 @@ def plot_market_cap_distribution(stocks, ymd: str, ymd_start_of_timeframe: str):
                     axis_text_y=small_text)
     return plot
 
-def plot_breakdown(cip_df: pd.DataFrame):
+def plot_breakdown(data_factory: Callable[[], tuple]):
     """Stacked bar plot of increasing and decreasing stocks per sector in the specified df"""
+    cip_df, top10, bottom10 = data_factory()
+
     cols_to_drop = [colname for colname in cip_df.columns if colname.startswith('bin_')]
     df = cip_df.drop(columns=cols_to_drop)
     df = pd.DataFrame(df.sum(axis='columns'), columns=['sum'])
@@ -468,10 +458,10 @@ def plot_breakdown(cip_df: pd.DataFrame):
                   )
         + p9.coord_flip()
     )
-    return plot
+    return plot, top10, bottom10
 
 def plot_heatmap(
-        df: pd.DataFrame,
+        data_factory: Callable[[], pd.DataFrame], # factory must return a change-in-percent (cip) dataframe eg. see selected_stocks_cip()
         timeframe: Timeframe,
         bin_cb=price_change_bins,
 ) -> p9.ggplot:
@@ -480,6 +470,7 @@ def plot_heatmap(
     the percentage change on the specified date (other metrics may also be used, but you will likely need to adjust the bins)
     Also computes top10/worst10 and returns a tuple (plot, top10, bottom10, n_stocks). Top10/Bottom10 will contain n_top_bottom stocks.
     """
+    df = data_factory()
     bins, labels = bin_cb()
     # print(df.columns)
     # print(bins)

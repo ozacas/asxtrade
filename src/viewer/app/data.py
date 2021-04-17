@@ -21,9 +21,9 @@ def hash_str(key: str) -> str:
     assert isinstance(result, str)
     return result
 
-check_hash_collision_dict:dict = {}
+check_hash_collision_dict: dict = {}
 
-def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django_cache=None, dont_cache=False):
+def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django_cache=None, dont_cache=False) -> str:
     """
     Using the specified key compute try to find a suitable dynamic image via diskcache. If not found plot_factory() is invoked
     to compute the image. Cache retrieval is disabled if dont_cache is True (useful for debugging). Dynamic images are cached for 120mins by default.

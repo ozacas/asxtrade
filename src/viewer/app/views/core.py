@@ -15,7 +15,8 @@ from app.models import (
     all_etfs, increasing_yield, increasing_eps
 )
 from app.messages import info, warning, add_messages
-from app.plots import cached_breakdown, cached_heatmap
+from app.plots import cached_heatmap, plot_breakdown
+from app.data import cache_plot
 
 @login_required
 def png(request, key):
@@ -81,17 +82,22 @@ def show_companies(
     context['page_obj'] = page_obj
     context['object_list'] = paginator
 
-    if len(asx_codes) <= 0:
-        warning(request, "No matching companies found.")
-    else:
+    def data_factory() -> tuple:
+        # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
         cip = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
-         # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
         sum_by_company = cip.sum(axis=1) 
         top10 = sum_by_company.nlargest(n_top_bottom)
         bottom10 = sum_by_company.nsmallest(n_top_bottom)
+        return cip, top10, bottom10
 
-        sentiment_heatmap_uri = cached_heatmap(asx_codes, sentiment_timeframe)
-        sector_breakdown_uri = cached_breakdown(asx_codes, sentiment_timeframe)
+    if len(asx_codes) <= 0:
+        warning(request, "No matching companies found.")
+    else:
+        sentiment_heatmap_uri = cached_heatmap(asx_codes, sentiment_timeframe, lambda: selected_cached_stocks_cip(asx_codes, sentiment_timeframe))
+        key = "-".join(asx_codes) + "-" + sentiment_timeframe.description + "-breakdown-plot"
+        breakdown_plot, top10, bottom10 = plot_breakdown(data_factory)
+        sector_breakdown_uri = cache_plot(key, lambda: breakdown_plot)
+
         context.update({
             "best_ten": top10,
             "worst_ten": bottom10,
