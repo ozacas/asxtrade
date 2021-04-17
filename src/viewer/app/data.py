@@ -7,8 +7,9 @@ from datetime import datetime
 import io
 import hashlib
 from typing import Iterable
+import numpy as np
 import pandas as pd
-from app.models import companies_with_same_sector, day_low_high
+from app.models import companies_with_same_sector, day_low_high, Timeframe, company_prices, validate_date, VirtualPurchase
 from django.core.cache import cache
 import plotnine as p9
 import matplotlib.pyplot as plt
@@ -22,7 +23,11 @@ def hash_str(key: str) -> str:
 
 check_hash_collision_dict:dict = {}
 
-def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django_cache=None):
+def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django_cache=None, dont_cache=False):
+    """
+    Using the specified key compute try to find a suitable dynamic image via diskcache. If not found plot_factory() is invoked
+    to compute the image. Cache retrieval is disabled if dont_cache is True (useful for debugging). Dynamic images are cached for 120mins by default.
+    """
     assert plot_factory is not None
     
     if django_cache is None:
@@ -31,14 +36,14 @@ def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django
     # ensure all URLs are sha256 hexdigest's regardless of the key specified to avoid data leak and security from brute-forcing
     cache_key = hash_str(key)
 
-    if debug: # check for collisions?
+    if debug: # check for unwanted collisions?
         if cache_key in check_hash_collision_dict and key != check_hash_collision_dict[cache_key]:
             raise ValueError("*** HASH collision! expected {key} but found: {check_hash_collision_dict[cache_key]}")
         elif cache_key not in check_hash_collision_dict:
             check_hash_collision_dict[cache_key] = key
 
     # plot already done and in cache?
-    if cache_key in django_cache:
+    if cache_key in django_cache and not dont_cache:
         return cache_key
 
     with io.BytesIO(bytearray(200*1024)) as buf:
@@ -62,6 +67,57 @@ def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django
         django_cache.set(cache_key, buf.read(n_bytes), timeout=timeout, read=True) # no page should take 10 minutes to render so this should guarantee object exists when served...
         plt.close(fig)
         return cache_key
+
+def make_portfolio_performance_dataframe(stocks: Iterable[str], timeframe: Timeframe, purchases: Iterable[VirtualPurchase]) -> pd.DataFrame:
+    def sum_portfolio(df: pd.DataFrame, date_str: str, stock_items):
+        validate_date(date_str)
+
+        portfolio_worth = sum(map(lambda t: df.at[t[0], date_str] * t[1], stock_items))
+        return portfolio_worth
+
+    df = company_prices(stocks, timeframe, transpose=True)
+    rows = []
+    stock_count = defaultdict(int)
+    stock_cost = defaultdict(float)
+    portfolio_cost = 0.0
+
+    for d in [datetime.strptime(x, "%Y-%m-%d").date() for x in timeframe.all_dates()]:
+        d_str = str(d)
+        if d_str not in df.columns:  # not a trading day?
+            continue
+        purchases_to_date = filter(lambda vp, d=d: vp.buy_date <= d, purchases)
+        for purchase in purchases_to_date:
+            if purchase.buy_date == d:
+                portfolio_cost += purchase.amount
+                stock_count[purchase.asx_code] += purchase.n
+                stock_cost[purchase.asx_code] += purchase.amount
+
+        portfolio_worth = sum_portfolio(df, d_str, stock_count.items())
+        #print(df)
+        # emit rows for each stock and aggregate portfolio
+        for asx_code in stocks:
+            cur_price = df.at[asx_code, d_str]
+            if np.isnan(cur_price):  # price missing? ok, skip record
+                continue
+            assert cur_price is not None and cur_price >= 0.0
+            stock_worth = cur_price * stock_count[asx_code]
+
+            rows.append(
+                {
+                    "portfolio_cost": portfolio_cost,
+                    "portfolio_worth": portfolio_worth,
+                    "portfolio_profit": portfolio_worth - portfolio_cost,
+                    "stock_cost": stock_cost[asx_code],
+                    "stock_worth": stock_worth,
+                    "stock_profit": stock_worth - stock_cost[asx_code],
+                    "date": d_str,
+                    "stock": asx_code,
+                }
+            )
+
+    df = pd.DataFrame.from_records(rows)
+    df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+    return df
 
 def make_portfolio_dataframe(df: pd.DataFrame, melt=False):
     assert df is not None

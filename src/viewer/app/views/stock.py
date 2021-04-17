@@ -1,17 +1,12 @@
 """
 Responsible for providing detiled views about a single stock and closely related views
 """
-from collections import defaultdict
-from datetime import datetime
 import pandas as pd
-import numpy as np
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from app.models import (validate_stock, validate_user, stock_info, cached_all_stocks_cip, companies_with_same_sector,
-                        Timeframe, company_prices, rsi_data, user_watchlist, selected_cached_stocks_cip, 
-                        validate_date, user_purchases, all_available_dates, timing)
-from app.analysis import (default_point_score_rules, rank_cumulative_change, 
-                        calculate_trends)
+                        Timeframe, company_prices, rsi_data, user_watchlist, selected_cached_stocks_cip, timing)
+from app.analysis import (default_point_score_rules, rank_cumulative_change, calculate_trends)
 from app.messages import warning
 from app.data import cache_plot, make_point_score_dataframe
 from app.plots import (plot_point_scores, plot_points_by_rule, plot_fundamentals, make_rsi_plot, plot_trend, plot_company_rank,
@@ -150,72 +145,12 @@ def show_trends(request):
     return render(request, "watchlist-rank.html", context=context)
 
 
-def sum_portfolio(df: pd.DataFrame, date_str: str, stock_items):
-    validate_date(date_str)
-
-    portfolio_worth = sum(map(lambda t: df.at[t[0], date_str] * t[1], stock_items))
-    return portfolio_worth
 
 @login_required
 def show_purchase_performance(request):
     validate_user(request.user)
 
-    purchase_buy_dates = []
-    purchases = []
-    stocks = []
-    for stock, purchases_for_stock in user_purchases(request.user).items():
-        stocks.append(stock)
-        for purchase in purchases_for_stock:
-            purchase_buy_dates.append(purchase.buy_date)
-            purchases.append(purchase)
-
-    purchase_buy_dates = sorted(purchase_buy_dates)
-    # print("earliest {} latest {}".format(purchase_buy_dates[0], purchase_buy_dates[-1]))
-
-    timeframe = Timeframe(from_date=str(purchase_buy_dates[0]), to_date=all_available_dates()[-1])
-    df = company_prices(stocks, timeframe, transpose=True)
-    rows = []
-    stock_count = defaultdict(int)
-    stock_cost = defaultdict(float)
-    portfolio_cost = 0.0
-
-    for d in [datetime.strptime(x, "%Y-%m-%d").date() for x in timeframe.all_dates()]:
-        d_str = str(d)
-        if d_str not in df.columns:  # not a trading day?
-            continue
-        purchases_to_date = filter(lambda vp, d=d: vp.buy_date <= d, purchases)
-        for purchase in purchases_to_date:
-            if purchase.buy_date == d:
-                portfolio_cost += purchase.amount
-                stock_count[purchase.asx_code] += purchase.n
-                stock_cost[purchase.asx_code] += purchase.amount
-
-        portfolio_worth = sum_portfolio(df, d_str, stock_count.items())
-        #print(df)
-        # emit rows for each stock and aggregate portfolio
-        for asx_code in stocks:
-            cur_price = df.at[asx_code, d_str]
-            if np.isnan(cur_price):  # price missing? ok, skip record
-                continue
-            assert cur_price is not None and cur_price >= 0.0
-            stock_worth = cur_price * stock_count[asx_code]
-
-            rows.append(
-                {
-                    "portfolio_cost": portfolio_cost,
-                    "portfolio_worth": portfolio_worth,
-                    "portfolio_profit": portfolio_worth - portfolio_cost,
-                    "stock_cost": stock_cost[asx_code],
-                    "stock_worth": stock_worth,
-                    "stock_profit": stock_worth - stock_cost[asx_code],
-                    "date": d_str,
-                    "stock": asx_code,
-                }
-            )
-
-    df = pd.DataFrame.from_records(rows)
-    username = request.user.username
-    portfolio_performance_uri, stock_performance_uri, contributors_uri = cached_portfolio_performance(df, username)
+    portfolio_performance_uri, stock_performance_uri, contributors_uri = cached_portfolio_performance(request.user)
    
     context = {
         "title": "Portfolio performance",

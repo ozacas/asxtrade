@@ -6,7 +6,7 @@ import base64
 import io
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
-from typing import Iterable
+from typing import Iterable, Callable
 import numpy as np
 import pandas as pd
 import matplotlib.dates as mdates
@@ -14,8 +14,9 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
 from mizani.formatters import date_format
-from app.models import stocks_by_sector, Timeframe, valid_quotes_only, timing, selected_cached_stocks_cip
-from app.data import make_sector_performance_dataframe, make_stock_vs_sector_dataframe, make_portfolio_dataframe, cache_plot
+from django.contrib.auth import get_user_model
+from app.models import stocks_by_sector, Timeframe, valid_quotes_only, timing, selected_cached_stocks_cip, user_purchases, all_available_dates
+from app.data import make_sector_performance_dataframe, make_stock_vs_sector_dataframe, make_portfolio_dataframe, cache_plot, make_portfolio_performance_dataframe
 
 def price_change_bins():
     """
@@ -75,14 +76,33 @@ def cached_sector_performance(sector: str, sector_companies, cip: pd.DataFrame, 
         return plot_sector_performance(df, sector, window_size=window_size) if df is not None else None
     return cache_plot(cache_key, inner)
 
-def cached_portfolio_performance(df: pd.DataFrame, username: str):
+def cached_portfolio_performance(user):
+    assert isinstance(user, get_user_model())
+    username = user.username
     overall_key = f"{username}-portfolio-performance"
     stock_key = f"{username}-stock-performance"
     contributors_key = f"{username}-contributor-performance"
 
-    return (cache_plot(overall_key, lambda: plot_overall_portfolio(df)),
-            cache_plot(stock_key, lambda: plot_portfolio_stock_performance(df)),
-            cache_plot(contributors_key, lambda: plot_portfolio_contributors(df)))
+    def data_factory(): # dont create the dataframe unless we have to - avoid exxpensive call!
+        purchase_buy_dates = []
+        purchases = []
+        stocks = []
+
+        for stock, purchases_for_stock in user_purchases(user).items():
+            stocks.append(stock)
+            for purchase in purchases_for_stock:
+                purchase_buy_dates.append(purchase.buy_date)
+                purchases.append(purchase)
+
+        purchase_buy_dates = sorted(purchase_buy_dates)
+        # print("earliest {} latest {}".format(purchase_buy_dates[0], purchase_buy_dates[-1]))
+        timeframe = Timeframe(from_date=str(purchase_buy_dates[0]), to_date=all_available_dates()[-1])
+
+        return make_portfolio_performance_dataframe(stocks, timeframe, purchases)
+    
+    return (cache_plot(overall_key, lambda: plot_overall_portfolio(data_factory)),
+            cache_plot(stock_key, lambda: plot_portfolio_stock_performance(data_factory)),
+            cache_plot(contributors_key, lambda: plot_portfolio_contributors(data_factory)))
     
 def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=True):
     rows = []
@@ -159,12 +179,12 @@ def plot_fundamentals(df: pd.DataFrame, stock: str, line_size=1.5) -> str: # pyl
     return plot
 
 
-def plot_overall_portfolio(df, figure_size=(12, 4), line_size=1.5, date_text_size=7) -> p9.ggplot:
+def plot_overall_portfolio(data_factory:Callable[[], pd.DataFrame], figure_size=(12, 4), line_size=1.5, date_text_size=7) -> p9.ggplot:
     """
     Given a daily snapshot of virtual purchases plot both overall and per-stock
     performance. Return a tuple of figures representing the performance as inline data.
     """
-    portfolio_df = make_portfolio_dataframe(df)
+    portfolio_df = data_factory()
 
     df = portfolio_df.filter(
         items=["portfolio_cost", "portfolio_worth", "portfolio_profit", "date"]
@@ -184,7 +204,8 @@ def plot_overall_portfolio(df, figure_size=(12, 4), line_size=1.5, date_text_siz
     )
     return plot
 
-def plot_portfolio_contributors(df: pd.DataFrame, figure_size=(11,5)) -> p9.ggplot:
+def plot_portfolio_contributors(data_factory: Callable[[], pd.DataFrame], figure_size=(11,5)) -> p9.ggplot:
+    df = data_factory()
     melted_df = make_portfolio_dataframe(df, melt=True)
     
     all_dates = sorted(melted_df["date"].unique())
@@ -196,16 +217,16 @@ def plot_portfolio_contributors(df: pd.DataFrame, figure_size=(11,5)) -> p9.ggpl
 
     # 2. plot contributors ie. winners and losers
     plot = (
-        p9.ggplot(df, p9.aes("stock", "value", fill="stock"))
+        p9.ggplot(df, p9.aes("stock", "value", group="stock", fill="stock"))
         + p9.geom_bar(stat="identity")
-        + p9.scale_colour_cmap_d()
+        + p9.scale_fill_cmap_d()
         + p9.labs(x="", y="$ AUD")
         + p9.facet_grid("contribution ~ field", scales="free_y")
         + p9.theme(legend_position="none", figure_size=figure_size)
     )
     return plot
 
-def plot_portfolio_stock_performance(df: pd.DataFrame, figure_size=(11,5), date_text_size=7) -> p9.ggplot:
+def plot_portfolio_stock_performance(data_factory: Callable[[], pd.DataFrame], figure_size=(11,5), date_text_size=7) -> p9.ggplot:
     def inner(pos_or_neg_val: float) -> float:
         val = abs(pos_or_neg_val)
         if val > 10000.0: # TODO FIXME: these numbers dont take into account the total portfolio cost... or purchase size
@@ -217,6 +238,7 @@ def plot_portfolio_stock_performance(df: pd.DataFrame, figure_size=(11,5), date_
         else:
             return 0.5
 
+    df = data_factory()
     latest_date = df.iloc[-1, 6]
     latest_profit = df[df['date'] == latest_date]
     alpha_by_stock = defaultdict(float)
@@ -228,7 +250,8 @@ def plot_portfolio_stock_performance(df: pd.DataFrame, figure_size=(11,5), date_
     plot = (
         p9.ggplot(melted_df, p9.aes("date", "value", group="stock", colour="stock"))
         + p9.xlab("")
-        + p9.geom_line(p9.aes(alpha='alpha'), size=1.0)
+        + p9.geom_line(size=1.0)
+        + p9.scale_alpha(p9.aes(alpha='alpha'), guide=False)
         + p9.facet_grid("field ~ contribution", scales="free_y")
         + p9.scale_colour_cmap_d()
         + p9.theme(
