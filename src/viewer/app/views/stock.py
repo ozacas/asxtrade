@@ -9,7 +9,7 @@ from app.models import (validate_stock, validate_user, stock_info, cached_all_st
 from app.analysis import (default_point_score_rules, rank_cumulative_change, calculate_trends)
 from app.messages import warning
 from app.data import cache_plot, make_point_score_dataframe
-from app.plots import (plot_point_scores, plot_points_by_rule, plot_fundamentals, make_rsi_plot, plot_trend, plot_company_rank,
+from app.plots import (plot_point_scores, plot_points_by_rule, plot_fundamentals, plot_momentum, plot_trend, plot_company_rank,
                         cached_portfolio_performance, cached_sector_performance, cached_company_versus_sector)
 
 
@@ -92,17 +92,19 @@ def show_stock(request, stock=None, n_days=2 * 365):
     """
     validate_stock(stock)
     validate_user(request.user)
-
-    timeframe = Timeframe(past_n_days=n_days+200) # add 200 days so MA 200 can initialise itself before the plotting starts...
     plot_timeframe = Timeframe(past_n_days=n_days) # for template
-    stock_df = rsi_data(stock, timeframe) # may raise 404 if too little data available
-    company_details = stock_info(stock, lambda msg: warning(request, msg))
-    momentum_plot = cache_plot(f"{timeframe.description}-{stock}-rsi-plot", lambda: make_rsi_plot(stock, stock_df))
 
-    # plot the price over timeframe in monthly blocks
-    prices = stock_df[['last_price']].transpose() # use list of columns to ensure pd.DataFrame not pd.Series
-    prices = prices.filter(items=plot_timeframe.all_dates(), axis='columns') # drop any date in "warm up" period
-    monthly_maximum_plot = cache_plot(f"{timeframe.description}-{stock}-monthly-maximum-plot", lambda: plot_trend(prices, sample_period='M'))
+    def data_factory():
+        timeframe = Timeframe(past_n_days=n_days+200) # add 200 days so MA 200 can initialise itself before the plotting starts...
+        stock_df = rsi_data(stock, timeframe) # may raise 404 if too little data available
+        prices = stock_df[['last_price']].transpose() # use list of columns to ensure pd.DataFrame not pd.Series
+        prices = prices.filter(items=plot_timeframe.all_dates(), axis='columns') # drop any date in "warm up" period
+        return stock_df, prices
+
+    # key dynamic images and text for HTML response. We only compute the required data if image(s) not cached
+    company_details = stock_info(stock, lambda msg: warning(request, msg))
+    momentum_plot = cache_plot(f"{plot_timeframe.description}-{stock}-rsi-plot", lambda: plot_momentum(data_factory, stock))
+    monthly_maximum_plot = cache_plot(f"{plot_timeframe.description}-{stock}-monthly-maximum-plot", lambda: plot_trend(data_factory, sample_period='M'))
 
     # populate template and render HTML page with context
     context = {
@@ -125,16 +127,25 @@ def show_stock(request, stock=None, n_days=2 * 365):
 
 @login_required
 def show_trends(request):
-    validate_user(request.user)
-    stocks = user_watchlist(request.user)
+    user = request.user
+    validate_user(user)
+    stocks = user_watchlist(user)
     timeframe = Timeframe(past_n_days=300)
-    cip = selected_cached_stocks_cip(stocks, timeframe)
-    trends = calculate_trends(cip, stocks)
-    #print(trends)
-    # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
-    cip = rank_cumulative_change(cip.filter(trends.keys(), axis="index"), timeframe)
-    #print(cip)
-    trending_companies_plot = cache_plot(f"{request.user.username}-watchlist-trends", lambda: plot_company_rank(cip))
+    trends = None # initialised by data_factory() and returned IFF data_factory is called during cache_plot()
+
+    def data_factory():
+        cip = selected_cached_stocks_cip(stocks, timeframe)
+        trends = calculate_trends(cip, stocks)
+        #print(trends)
+        # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
+        cip = rank_cumulative_change(cip.filter(trends.keys(), axis="index"), timeframe)
+        #print(cip)
+        return cip, trends
+
+    trending_companies_plot = cache_plot(f"{user.username}-watchlist-trends", lambda: plot_company_rank(data_factory))
+    # if trends is None (ie. image cached) then we must compute it for the response
+    if trends is None:
+        _, trends = data_factory()
 
     context = {
         "watchlist_trends": trends,

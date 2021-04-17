@@ -264,7 +264,8 @@ def plot_portfolio_stock_performance(data_factory: Callable[[], pd.DataFrame], f
     return plot
 
 
-def plot_company_rank(df: pd.DataFrame):
+def plot_company_rank(data_factory: Callable[[], tuple]) -> p9.ggplot:
+    df, _ = data_factory()  # trends from data_factory is ignored for this call, but the view needs it later...
     # assert 'sector' in df.columns
     n_bin = len(df["bin"].unique())
     #print(df)
@@ -586,8 +587,9 @@ def relative_strength(prices, n=14):
     return rsi
 
 
-def make_rsi_plot(stock: str, stock_df: pd.DataFrame):
+def plot_momentum(data_factory: Callable[[], tuple], stock: str) -> plt.Figure:
     assert len(stock) > 0
+    stock_df, prices = data_factory()
 
     # print(last_price)
     # print(volume)
@@ -729,7 +731,7 @@ def make_rsi_plot(stock: str, stock_df: pd.DataFrame):
     return fig
 
 
-def plot_trend(dataframe: pd.DataFrame, sample_period="M") -> str:
+def plot_trend(data_factory: Callable[[], tuple], sample_period="M") -> str:
     """
     Given a dataframe of a single stock from company_prices() this plots the highest price
     in each month over the time period of the dataframe.
@@ -741,8 +743,8 @@ def plot_trend(dataframe: pd.DataFrame, sample_period="M") -> str:
             results.append(d.strftime("%Y-%m"))
         return results
 
+    _, dataframe = data_factory()
     assert dataframe is not None
-
     dataframe = dataframe.transpose()
     dataframe.index = pd.to_datetime(dataframe.index, format='%Y-%m-%d')
     dataframe = dataframe.resample(sample_period).max()
