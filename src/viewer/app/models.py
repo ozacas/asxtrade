@@ -556,7 +556,8 @@ def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=Fal
     #print(results)
     if max_price is not None:
         ymd = latest_quotation_date('ANZ')
-        stocks_lte_max_price = [q.asx_code for q in valid_quotes_only(ymd) if q.last_price <= max_price]
+        qs, actual_ymd = valid_quotes_only(ymd, ensure_date_has_data=True)
+        stocks_lte_max_price = [q.asx_code for q in qs if q.last_price <= max_price]
         results = results.filter(stocks_lte_max_price)
     print("Reporting {} movers after filtering".format(len(results)))
     return results

@@ -555,7 +555,7 @@ def relative_strength(prices, n=14):
 
 def plot_momentum(data_factory: Callable[[], tuple], stock: str) -> plt.Figure:
     assert len(stock) > 0
-    stock_df, prices = data_factory()
+    stock_df, _ = data_factory()
 
     # print(last_price)
     # print(volume)

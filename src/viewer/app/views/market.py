@@ -113,7 +113,7 @@ def show_pe_trends(request):
     eps_stocks = set(eps_df.index)
     n_stocks = len(pe_df)
     positive_pe_stocks = set(pe_df[pe_df.sum(axis=1) > 0.0].index)
-    all_stocks = set(pe_df.index)
+    asx_codes = set(pe_df.index)
     n_non_zero_sum = len(positive_pe_stocks)
     #print(exclude_zero_sum)
     records = []
@@ -136,7 +136,7 @@ def show_pe_trends(request):
         sum_pe_per_sector = defaultdict(float)
         sum_eps_per_sector = defaultdict(float)
 
-        for stock in filter(lambda code: code in ss_dict, all_stocks):
+        for stock in filter(lambda code: code in ss_dict, asx_codes):
             sector = ss_dict[stock]
             assert isinstance(sector, str)
 
