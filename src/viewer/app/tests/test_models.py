@@ -88,13 +88,14 @@ def crafted_quotation_fixture(quotation_factory):
 
 @pytest.mark.django_db
 def test_valid_quotes_only(crafted_quotation_fixture): # pylint: disable=unused-argument,redefined-outer-name
-    result = valid_quotes_only('2021-01-01')
+    result, actual_date = valid_quotes_only('2021-01-01')
     assert result is not None
     assert len(result) == 1
     assert result[0].asx_code == 'ANZ'
     assert result[0].fetch_date == '2021-01-01'
     assert result[0].last_price == 10.10
     assert result[0].volume == 1
+    assert actual_date == '2021-01-01'
 
 def test_validate_stock():
     bad_stocks = [None, "AB", "---"]
