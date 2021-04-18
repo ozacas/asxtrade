@@ -473,7 +473,7 @@ def all_sector_stocks(sector_name: str) -> set:
     return stocks
 
 @func.lfu_cache(maxsize=2) # cache today's data only to save memory 
-def valid_quotes_only(ymd: str, sort_by=None):
+def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tuple:
     validate_date(ymd)
     results = (
         Quotation.objects.filter(fetch_date=ymd)
@@ -482,10 +482,15 @@ def valid_quotes_only(ymd: str, sort_by=None):
         .exclude(last_price__isnull=True)
         .order_by("-annual_dividend_yield", "-last_price", "-volume") # default order_by, see below
     )
+    if len(results) == 0 and ensure_date_has_data:
+        # decrease date by 1 and try again... (we cant increment because this might go into the future)
+        dt = datetime.strptime(ymd, '%Y-%m-%d') - timedelta(days=1)
+        return valid_quotes_only(dt.strftime("%Y-%m-%d"), sort_by=sort_by, ensure_date_has_data=True)
+
     if sort_by is not None:
         results = results.order_by(sort_by)
     assert results is not None # POST-CONDITION: must be valid queryset
-    return results
+    return results, ymd
 
 def desired_dates(today=None, start_date=None):  # today is provided as keyword arg for testing
     """

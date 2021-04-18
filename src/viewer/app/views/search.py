@@ -113,7 +113,10 @@ class SectorSearchView(DividendYieldSearch):
             bottom_N = set(cip_sum.nsmallest(report_bottom_n, "percent_cip").index) if report_bottom_n is not None else set()
             wanted_stocks = top_N.union(bottom_N)
         print("Requesting valid quotes for {} stocks".format(len(wanted_stocks)))
-        self.qs = valid_quotes_only(mrd).filter(asx_code__in=wanted_stocks)
+        quotations_as_at, actual_mrd = valid_quotes_only(mrd, ensure_date_has_data=True)
+        if actual_mrd != mrd:
+            warning(self.request, f"Due to no data (non-trading day?), date {mrd} adusted to {actual_mrd}")
+        self.qs = quotations_as_at.filter(asx_code__in=wanted_stocks)
         if len(self.qs) < len(wanted_stocks):
             got = set([q.asx_code for q in self.qs.all()])
             missing_stocks = wanted_stocks.difference(got)

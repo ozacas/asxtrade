@@ -120,7 +120,7 @@ def show_all_stocks(request):
         raise Http404("No ASX price data available!")
     ymd = all_dates[-1]
     validate_date(ymd)
-    qs = valid_quotes_only(ymd)
+    qs, _ = valid_quotes_only(ymd)
     timeframe = Timeframe()
     return show_companies(qs, request, timeframe, extra_context={
         "title": "All stocks",

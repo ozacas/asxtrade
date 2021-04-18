@@ -9,7 +9,7 @@
     <ul>
         <li>A total of {{ n_stocks }} stocks are clustered below</li>
         <li>K={{ k }} was chosen to perform the clustering: each cluster (ie. colours) is shown in its own plot</li>
-        <li>Standard deviation of change-in-price (as a percentage) is used as the source of volatility data</li>
+        <li>Stocks are clustered using only return (change-in-percent) and volatility (standard deviation of return) data over the timeframe</li>
         <li>Assumption of 252 trading days per year (annualised returns/volatility)</li>
         <li>Timeframe for data used for clustering: {{ timeframe.description }}</li>
         <li>Recently listed stocks may be impacted in terms of clustering with only partial data</li>

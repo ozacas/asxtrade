@@ -15,7 +15,7 @@ import matplotlib.font_manager as font_manager
 import plotnine as p9
 from mizani.formatters import date_format
 from django.contrib.auth import get_user_model
-from app.models import stocks_by_sector, Timeframe, valid_quotes_only, timing, selected_cached_stocks_cip, user_purchases, all_available_dates
+from app.models import stocks_by_sector, Timeframe, timing, selected_cached_stocks_cip, user_purchases, all_available_dates
 from app.data import make_sector_performance_dataframe, make_stock_vs_sector_dataframe, make_portfolio_dataframe, cache_plot, make_portfolio_performance_dataframe
 
 def price_change_bins():
@@ -47,7 +47,7 @@ def price_change_bins():
     return (bins, labels)
 
 def cached_heatmap(asx_codes: Iterable[str], timeframe: Timeframe, data_factory: Callable[[], pd.DataFrame]) -> str:
-    key = "-".join(asx_codes) + "-" + timeframe.description + "-stocks-sentiment-plot"
+    key = "-".join(sorted(asx_codes)) + "-" + timeframe.description + "-stocks-sentiment-plot"
     return cache_plot(key, lambda: plot_heatmap(data_factory, timeframe))
 
 def cached_company_versus_sector(stock: str, sector: str, sector_companies, cip: pd.DataFrame) -> str:
@@ -296,11 +296,12 @@ def plot_company_versus_sector(df: pd.DataFrame, stock: str, sector: str) -> str
     return plot
 
 
-def plot_market_wide_sector_performance(all_stocks_cip: pd.DataFrame):
+def plot_market_wide_sector_performance(data_factory: Callable[[], pd.DataFrame]) -> p9.ggplot:
     """
     Display specified dates for average sector performance. Each company is assumed to have at zero
     at the start of the observation period. A plot as base64 data is returned.
     """
+    all_stocks_cip = data_factory()
     n_stocks = len(all_stocks_cip)
     # merge in sector information for each company
     code_and_sector = stocks_by_sector()
@@ -389,36 +390,10 @@ def plot_series(
         plot += p9.geom_line(size=line_size)
     return plot
 
-def bin_market_cap(row):
-    mc = row[0] # NB: expressed in millions $AUD already (see plot_market_cap_distribution() below)
-    if mc < 2000:
-        return "small"
-    elif mc > 10000:
-        return "large"
-    elif mc is not None:
-        return "med"
-    else:
-        return "NA"
+def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
+    df = data_factory()
+    assert set(df.columns).intersection(set(["market", "market_cap", "bin"])) == set(["market", "market_cap", "bin"])
 
-def make_quote_df(quotes, asx_codes, prefix):
-    df = pd.DataFrame.from_dict({q.asx_code: (q.market_cap / (1000 * 1000), q.last_price, q.number_of_shares) 
-                                for q in quotes if q.market_cap is not None and q.asx_code in asx_codes}, 
-                                orient="index", columns=["market_cap", "last_price", "shares"])
-    df['bin'] = df.apply(bin_market_cap, axis=1)
-    df['market'] = prefix
-    return df
-
-def plot_market_cap_distribution(stocks, ymd: str, ymd_start_of_timeframe: str):
-    #print(ymd)
-    latest_quotes = valid_quotes_only(ymd)
-    earliest_quotes = valid_quotes_only(ymd_start_of_timeframe)
-    asx_codes = set(stocks)
-   
-    latest_df = make_quote_df(latest_quotes, asx_codes, ymd)
-    earliest_df = make_quote_df(earliest_quotes, asx_codes, ymd_start_of_timeframe)
-    df = latest_df.append(earliest_df)
-
-    #print(df)
     small_text = p9.element_text(size=7)
     plot = p9.ggplot(df) + \
            p9.geom_boxplot(p9.aes(x='market', y='market_cap')) + \

@@ -2,15 +2,18 @@
 Responsible for handling requests for pages from the website and delegating the analysis
 and visualisation as required.
 """
+from typing import Iterable
 from numpy import isnan
 import pandas as pd
 from collections import defaultdict
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
+from app.messages import warning
 from app.models import (
     user_watchlist,
-    latest_quotation_date,
     cached_all_stocks_cip,
+    valid_quotes_only,
+    all_stocks,
     company_prices,
     Timeframe,
     validate_user,
@@ -25,6 +28,27 @@ from app.plots import (
     plot_sector_field,
 )
 
+
+def bin_market_cap(row):
+    mc = row[0] # NB: expressed in millions $AUD already (see plot_market_cap_distribution() below)
+    if mc < 2000:
+        return "small"
+    elif mc > 10000:
+        return "large"
+    elif mc is not None:
+        return "med"
+    else:
+        return "NA"
+
+def make_quote_df(quotes, asx_codes: Iterable[str], prefix: str):
+    df = pd.DataFrame.from_dict({q.asx_code: (q.market_cap / (1000 * 1000), q.last_price, q.number_of_shares) 
+                                for q in quotes if q.market_cap is not None and q.asx_code in asx_codes}, 
+                                orient="index", columns=["market_cap", "last_price", "shares"])
+    #print(df)
+    df['bin'] = df.apply(bin_market_cap, axis=1)
+    df['market'] = prefix
+    return df
+
 @login_required
 def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     validate_user(request.user)
@@ -32,17 +56,35 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
     assert n_top_bottom > 0
     timeframe = Timeframe(past_n_days=n_days)
     sector_timeframe = Timeframe(past_n_days=sector_n_days)
-    df = cached_all_stocks_cip(timeframe)
-    sector_df = cached_all_stocks_cip(sector_timeframe)
-    sentiment_plot = cached_heatmap(tuple(df.index), timeframe, df)
+    asx_codes = all_stocks()
+
+    def data_factory():
+        cip = cached_all_stocks_cip(timeframe)
+        return cip
+    def sector_data_factory():
+        sector_df = cached_all_stocks_cip(sector_timeframe)
+        return sector_df
+    def market_cap_data_factory():
+        latest_date = timeframe.most_recent_date
+        earliest_date = timeframe.earliest_date
+        latest_quotes, actual_latest_date = valid_quotes_only(latest_date, ensure_date_has_data=True)
+        earliest_quotes, actual_earliest_date = valid_quotes_only(earliest_date, ensure_date_has_data=True)
+        latest_df = make_quote_df(latest_quotes, asx_codes, actual_latest_date)
+        earliest_df = make_quote_df(earliest_quotes, asx_codes, actual_earliest_date)
+        if actual_earliest_date != earliest_date or latest_date != actual_latest_date:
+            warning(request, f"Due to no data, dates adjusted to {actual_earliest_date}..{actual_latest_date}")
+        df = latest_df.append(earliest_df)
+        return df
+
+    sentiment_plot = cached_heatmap(all_stocks(), timeframe, data_factory)
     sector_performance_plot = cache_plot(f"sector-performance-{sector_timeframe.description}", 
-                                      lambda: plot_market_wide_sector_performance(sector_df))
+                                      lambda: plot_market_wide_sector_performance(sector_data_factory))
     market_cap_dist_plot = cache_plot(f"market-cap-dist-{sector_timeframe.description}",
-                                      lambda: plot_market_cap_distribution(tuple(df.index), latest_quotation_date('ANZ'), sector_df.columns[0]))
+                                      lambda: plot_market_cap_distribution(market_cap_data_factory))
     context = {
         "sentiment_uri": sentiment_plot,
         "n_days": timeframe.n_days,
-        "n_stocks_plotted": len(df),
+        "n_stocks_plotted": len(asx_codes),
         "n_top_bottom": n_top_bottom,
         #"best_ten": top10,
         #"worst_ten": bottom10,
