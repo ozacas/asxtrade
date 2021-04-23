@@ -66,7 +66,7 @@ def cluster_stocks_view(request, stocks: str):
                            figure_size=(15,15))
         )
 
-    stocks_as_str = "-".join(asx_codes)
+    stocks_as_str = "-".join(sorted(asx_codes))
     elbow_curve_uri = cache_plot(f"{request.user.username}-cluster-{stocks_as_str}-elbow-curve-plot", elbow_curve_plot)
     cluster_uri = cache_plot(f"{request.user.username}-cluster-{stocks_as_str}-kmeans-cluster-plot", cluster_plot)
     context = {

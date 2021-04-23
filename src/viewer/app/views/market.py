@@ -2,10 +2,10 @@
 Responsible for handling requests for pages from the website and delegating the analysis
 and visualisation as required.
 """
+from collections import defaultdict
 from typing import Iterable
 from numpy import isnan
 import pandas as pd
-from collections import defaultdict
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from app.messages import warning

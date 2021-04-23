@@ -5,8 +5,14 @@ and the free ASX API endpoint
 from datetime import datetime, timedelta, date
 import re
 import io
+import json
+import pytz
+import hashlib
 from collections import defaultdict
 import pandas as pd
+from functools import wraps
+from time import time
+from bson.binary import Binary
 import django.db.models as model
 from django.conf import settings
 from django.forms.models import model_to_dict
@@ -14,12 +20,11 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.dispatch import receiver
-from djongo.models import ObjectIdField, DjongoManager
+from djongo.models import ObjectIdField, DjongoManager, ArrayField
 from djongo.models.json import JSONField
 from django.http import Http404
 from cachetools import cached, LRUCache, LFUCache, keys, func
-from functools import wraps
-from time import time
+
 
 def timing(f):
     @wraps(f)
@@ -27,25 +32,31 @@ def timing(f):
         ts = time()
         result = f(*args, **kw)
         te = time()
-        #print('func:%r args:[%r, %r] took: %2.4f sec' %  (f.__name__, args, kw, te-ts))
-        print('func:{} took: {} sec'.format(f.__name__, te-ts))
+        # print('func:%r args:[%r, %r] took: %2.4f sec' %  (f.__name__, args, kw, te-ts))
+        print("func:{} took: {} sec".format(f.__name__, te - ts))
         return result
+
     return wrap
 
+
 watchlist_cache = LRUCache(maxsize=1024)
+
 
 def validate_stock(stock: str) -> None:
     assert stock is not None
     assert isinstance(stock, str) and len(stock) >= 3
     assert re.match(r"^\w+$", stock)
 
+
 def validate_date(d: str) -> None:
     assert isinstance(d, str) and len(d) < 20  # YYYY-mm-dd must be less than 20
     assert re.match(r"^\d{4}-\d{2}-\d{2}$", d)
 
+
 def validate_sector(sector: str) -> None:
     assert len(sector) > 0
     assert sector in set([sector1 for sector1, sector2 in all_sectors()])
+
 
 def validate_user(user):
     assert user is not None
@@ -65,26 +76,32 @@ class Timeframe:
     4) Timeframe(from_date='YYYY-mm-dd', n=30) eg. 30 days from specified date (inclusive)
     In any case Timeframe.desired_dates() yields a list of date in ascending order
     """
-    today = None # useful for unit testing: must be datetime.date if specified
+
+    today = None  # useful for unit testing: must be datetime.date if specified
 
     def __init__(self, **kwargs):
         d = dict(**kwargs)
-        for k in ['from_date', 'to_date']: # validate all dates to detect problems early
+        for k in [
+            "from_date",
+            "to_date",
+        ]:  # validate all dates to detect problems early
             if k in d:
                 validate_date(d.get(k))
-        self.today = d.pop('today', None) # remove today from being placed into self.tf
+        self.today = d.pop("today", None)  # remove today from being placed into self.tf
         self.tf = d
 
     def __lt__(self, other):
-        a_from = self.tf.get('from_date', None)
-        b_from = other.tf.get('from_date', None)
+        a_from = self.tf.get("from_date", None)
+        b_from = other.tf.get("from_date", None)
         if a_from is not None and b_from is not None:
-            return datetime.strptime(a_from, "%Y-%m-%d") < datetime.strptime(b_from, "%Y-%m-%d")
+            return datetime.strptime(a_from, "%Y-%m-%d") < datetime.strptime(
+                b_from, "%Y-%m-%d"
+            )
         return 0
 
     def __hash__(self):
         return hash(tuple(self.tf)) ^ hash(self.tf.values())
-    
+
     def _is_empty_state(self):
         return self.tf == {}
 
@@ -94,19 +111,22 @@ class Timeframe:
             return desired_dates(today=self.today, start_date=30)
 
         # most common use case: past N days only
-        past_n_days = self.tf.get('past_n_days', None)
+        past_n_days = self.tf.get("past_n_days", None)
         if past_n_days:
             return desired_dates(today=self.today, start_date=past_n_days)
 
         # timeframe of interest: from .. to date
-        from_date = self.tf.get('from_date', None)
-        to_date = self.tf.get('to_date', None)
+        from_date = self.tf.get("from_date", None)
+        to_date = self.tf.get("to_date", None)
         if all([from_date is not None, to_date is not None]):
             print(from_date)
             print(to_date)
             validate_date(from_date)
             validate_date(to_date)
-            possible_dates = desired_dates(today=datetime.strptime(to_date, "%Y-%m-%d").date(), start_date=from_date)
+            possible_dates = desired_dates(
+                today=datetime.strptime(to_date, "%Y-%m-%d").date(),
+                start_date=from_date,
+            )
             ret = []
             for d in possible_dates:
                 ret.append(d)
@@ -115,7 +135,7 @@ class Timeframe:
             return ret
 
         # N days from a start date
-        n = self.tf.get('n', None)
+        n = self.tf.get("n", None)
         if all([from_date is not None, n is not None]):
             validate_date(from_date)
             assert n > 0
@@ -132,40 +152,45 @@ class Timeframe:
 
     @property
     def n_days(self):
-        if 'past_n_days' in self.tf:
-            return self.tf.get('past_n_days')
-        elif 'n' in self.tf:
-            return self.tf.get('n')
+        if "past_n_days" in self.tf:
+            return self.tf.get("past_n_days")
+        elif "n" in self.tf:
+            return self.tf.get("n")
         elif self.tf == {}:
             return 30
         else:
-            return len(self.all_dates()) # expensive
+            return len(self.all_dates())  # expensive
 
     def date_range(self):
         return "{} - {}".format(self.earliest_date, self.most_recent_date)
 
     @property
     def description(self):
-        if 'past_n_days' in self.tf or self._is_empty_state():
-            return "past {} days since {}".format(self.tf.get('past_n_days', self.n_days), self.earliest_date)
-        elif all(['from_date' in self.tf, 'to_date' in self.tf]):
-            return "dates {} thru {} (inclusive)".format(self.tf.get('from_date'), self.tf.get('to_date'))
+        if "past_n_days" in self.tf or self._is_empty_state():
+            return "past {} days since {}".format(
+                self.tf.get("past_n_days", self.n_days), self.earliest_date
+            )
+        elif all(["from_date" in self.tf, "to_date" in self.tf]):
+            return "dates {} thru {} (inclusive)".format(
+                self.tf.get("from_date"), self.tf.get("to_date")
+            )
         else:
             all_dates = self.all_dates()
             return "dates {} thru {} (inclusive)".format(all_dates[0], all_dates[-1])
 
     @property
     def earliest_date(self):
-        from_date = self.tf.get('from_date', None)
+        from_date = self.tf.get("from_date", None)
         return from_date if from_date is not None else self.all_dates()[0]
 
     @property
     def most_recent_date(self):
-        to_date = self.tf.get('to_date', None)
+        to_date = self.tf.get("to_date", None)
         return to_date if to_date is not None else self.all_dates()[-1]
 
     def __str__(self):
         return f"Timeframe: {self.tf}"
+
 
 class Quotation(model.Model):
     _id = ObjectIdField()
@@ -183,7 +208,9 @@ class Quotation(model.Model):
     code = model.TextField(blank=False, null=False, max_length=20)
     day_high_price = model.FloatField()
     day_low_price = model.FloatField()
-    deprecated_market_cap = model.IntegerField()  # NB: deprecated use market_cap instead
+    deprecated_market_cap = (
+        model.IntegerField()
+    )  # NB: deprecated use market_cap instead
     deprecated_number_of_shares = model.IntegerField()
     descr_full = model.TextField(max_length=100)  # eg. Ordinary Fully Paid
     eps = model.FloatField()
@@ -252,8 +279,8 @@ class Security(model.Model):
     class Meta:
         db_table = "asx_isin"
         managed = False  # managed by asxtrade.py
-        verbose_name = 'Security'
-        verbose_name_plural = 'Securities'
+        verbose_name = "Security"
+        verbose_name_plural = "Securities"
 
 
 class CompanyDetails(model.Model):
@@ -323,8 +350,8 @@ class CompanyDetails(model.Model):
     class Meta:
         managed = False
         db_table = "asx_company_details"
-        verbose_name = 'Company Detail'
-        verbose_name_plural = 'Company Details'
+        verbose_name = "Company Detail"
+        verbose_name_plural = "Company Details"
 
 
 class Watchlist(model.Model):
@@ -340,12 +367,15 @@ class Watchlist(model.Model):
         managed = True  # viewer application is responsible NOT asxtrade.py
         db_table = "user_watchlist"
 
+
 @func.lru_cache(maxsize=16)
 def find_user(username: str):
     return get_user_model().objects.filter(username=username).first()
 
-def hash_watchlist_key(username, asx_code, **kwargs): # pylint: disable=unused-argument
+
+def hash_watchlist_key(username, asx_code, **kwargs):  # pylint: disable=unused-argument
     return keys.hashkey(username, asx_code)
+
 
 @cached(watchlist_cache, key=hash_watchlist_key)
 def is_in_watchlist(username: str, asx_code: str) -> bool:
@@ -355,6 +385,7 @@ def is_in_watchlist(username: str, asx_code: str) -> bool:
     else:
         rec = Watchlist.objects.filter(asx_code=asx_code, user=user).first()
         return rec is not None
+
 
 def toggle_watchlist_entry(user, asx_stock):
     assert user is not None
@@ -369,7 +400,7 @@ def toggle_watchlist_entry(user, asx_stock):
     try:
         # NB: must be the same key calculation and args as is_in_watchlist()
         watchlist_cache.pop(key=hash_watchlist_key(user.username, asx_stock))
-    except KeyError: # not in cache? thats ok so...
+    except KeyError:  # not in cache? thats ok so...
         pass
 
 
@@ -380,9 +411,10 @@ def user_watchlist(user):
     """
     hits = Watchlist.objects.filter(user=user).values_list("asx_code", flat=True)
     results = set(hits)
-    #if logger:
+    # if logger:
     #    logger.info("Found {} stocks in watchlist for user=".format(len(results), user.username))
     return results
+
 
 @func.lru_cache(maxsize=16)
 def all_available_dates(reference_stock="ANZ"):
@@ -399,6 +431,7 @@ def all_available_dates(reference_stock="ANZ"):
     ret = sorted(dates, key=lambda k: datetime.strptime(k, "%Y-%m-%d"))
     return ret
 
+
 def stock_info(stock: str, warning_cb=None) -> dict:
     assert len(stock) > 0
     securities = Security.objects.filter(asx_code=stock)
@@ -411,8 +444,9 @@ def stock_info(stock: str, warning_cb=None) -> dict:
         result = {}
     else:
         result = model_to_dict(company_details)
-    result['securities'] = securities
+    result["securities"] = securities
     return result
+
 
 @func.lru_cache(maxsize=1)
 def stocks_by_sector() -> pd.DataFrame:
@@ -433,6 +467,7 @@ class Sector(model.Model):
     """
     Table of ASX sector (GICS) names. Manually curated for now.
     """
+
     id = ObjectIdField(unique=True, db_column="_id")
     sector_name = model.TextField(unique=True)
     sector_id = model.IntegerField(db_column="id")
@@ -443,14 +478,20 @@ class Sector(model.Model):
         managed = False
         db_table = "sector"
 
+
 @func.lru_cache(maxsize=1)
 def all_sectors() -> list:
-    iterable = list(CompanyDetails.objects.order_by().values_list('sector_name', flat=True).distinct())
-    #print(iterable)
+    iterable = list(
+        CompanyDetails.objects.order_by()
+        .values_list("sector_name", flat=True)
+        .distinct()
+    )
+    # print(iterable)
     results = [
         (sector, sector) for sector in iterable
     ]  # as tuples since we want to use it in django form choice field
     return results
+
 
 def companies_with_same_sector(stock: str) -> set:
     """
@@ -461,8 +502,9 @@ def companies_with_same_sector(stock: str) -> set:
         return set()
     return all_sector_stocks(cd.sector_name)
 
+
 @func.lru_cache(maxsize=16)
-def all_sector_stocks(sector_name: str) -> set: 
+def all_sector_stocks(sector_name: str) -> set:
     """
     Return a set of ASX stock codes for every security designated as part of the specified sector
     """
@@ -472,7 +514,8 @@ def all_sector_stocks(sector_name: str) -> set:
     stocks = set(ss["asx_code"])
     return stocks
 
-@func.lfu_cache(maxsize=2) # cache today's data only to save memory 
+
+@func.lfu_cache(maxsize=2)  # cache today's data only to save memory
 def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tuple:
     validate_date(ymd)
     results = (
@@ -480,19 +523,26 @@ def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tupl
         .exclude(asx_code__isnull=True)
         .exclude(error_code="id-or-code-invalid")
         .exclude(last_price__isnull=True)
-        .order_by("-annual_dividend_yield", "-last_price", "-volume") # default order_by, see below
+        .order_by(
+            "-annual_dividend_yield", "-last_price", "-volume"
+        )  # default order_by, see below
     )
     if len(results) == 0 and ensure_date_has_data:
         # decrease date by 1 and try again... (we cant increment because this might go into the future)
-        dt = datetime.strptime(ymd, '%Y-%m-%d') - timedelta(days=1)
-        return valid_quotes_only(dt.strftime("%Y-%m-%d"), sort_by=sort_by, ensure_date_has_data=True)
+        dt = datetime.strptime(ymd, "%Y-%m-%d") - timedelta(days=1)
+        return valid_quotes_only(
+            dt.strftime("%Y-%m-%d"), sort_by=sort_by, ensure_date_has_data=True
+        )
 
     if sort_by is not None:
         results = results.order_by(sort_by)
-    assert results is not None # POST-CONDITION: must be valid queryset
+    assert results is not None  # POST-CONDITION: must be valid queryset
     return results, ymd
 
-def desired_dates(today=None, start_date=None):  # today is provided as keyword arg for testing
+
+def desired_dates(
+    today=None, start_date=None
+):  # today is provided as keyword arg for testing
     """
     Return a list of contiguous dates from [today-n_days thru to today inclusive] as 'YYYY-mm-dd' strings, Ordered
     from start_date thru today inclusive. Start_date may be:
@@ -518,6 +568,7 @@ def desired_dates(today=None, start_date=None):  # today is provided as keyword 
     assert len(all_dates) > 0
     return sorted(all_dates, key=lambda d: datetime.strptime(d, "%Y-%m-%d"))
 
+
 @func.lru_cache(maxsize=2)
 def all_stocks(strict=True):
     """Return all securities known (even if not stocks) if strict=False, otherwise ordinary fully paid shares and ETFs only"""
@@ -525,15 +576,23 @@ def all_stocks(strict=True):
         all_securities = []
         for security in Security.objects.all():
             name = security.security_name.lower()
-            if 'etf' in name or 'ordinary' in name:
-                #print(name)
+            if "etf" in name or "ordinary" in name:
+                # print(name)
                 all_securities.append(security.asx_code)
     else:
         all_securities = Security.objects.values_list("asx_code", flat=True)
-   
+
     return set(all_securities)
 
-def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=False, max_price=None, field="change_in_percent"):
+
+def find_movers(
+    threshold,
+    timeframe: Timeframe,
+    increasing=True,
+    decreasing=False,
+    max_price=None,
+    field="change_in_percent",
+):
     """
     Return a dataframe with row index set to ASX ticker symbols and the only column set to 
     the sum over all desired dates for percentage change in the stock price (by default). A negative sum
@@ -543,24 +602,29 @@ def find_movers(threshold, timeframe: Timeframe, increasing=True, decreasing=Fal
     cip = company_prices(all_stocks(), timeframe, fields=field, missing_cb=None)
 
     if field == "change_in_percent":
-        movements = cip.sum(axis=0) 
+        movements = cip.sum(axis=0)
     else:
         movements = cip.diff(periods=1, axis=0).fillna(0.0).sum(axis=0)
     # FALLTHRU...
     results = movements[movements.abs() >= threshold]
-    print("Found {} movers (using {}) before filtering: {} {}".format(len(results), field, increasing, decreasing))
+    print(
+        "Found {} movers (using {}) before filtering: {} {}".format(
+            len(results), field, increasing, decreasing
+        )
+    )
     if not increasing:
         results = results.drop(results[results > 0.0].index)
     if not decreasing:
         results = results.drop(results[results < 0.0].index)
-    #print(results)
+    # print(results)
     if max_price is not None:
-        ymd = latest_quotation_date('ANZ')
+        ymd = latest_quotation_date("ANZ")
         qs, actual_ymd = valid_quotes_only(ymd, ensure_date_has_data=True)
         stocks_lte_max_price = [q.asx_code for q in qs if q.last_price <= max_price]
         results = results.filter(stocks_lte_max_price)
     print("Reporting {} movers after filtering".format(len(results)))
     return results
+
 
 def find_named_companies(wanted_name, wanted_activity):
     ret = set()
@@ -599,6 +663,7 @@ def latest_quotation_date(stock):
     d = all_available_dates(reference_stock=stock)
     return d[-1]
 
+
 def latest_quote(stocks):
     """
     If stocks is a str, retrieves the latest quote and returns a tuple (Quotation, latest_date).
@@ -619,13 +684,6 @@ def latest_quote(stocks):
                 qs = qs.filter(asx_code__in=stocks)
         return (qs, latest_date)
 
-@func.lru_cache(maxsize=100)
-def get_parquet(tag: str) -> pd.DataFrame:
-    assert tag.startswith('uber') # deprecated: only use uber frames now, not single metric dataframe eg. eps to improve caching
-    cache_entry = MarketDataCache.objects.filter(tag=tag).first()
-    if cache_entry is not None:
-        return cache_entry.dataframe
-    return None
 
 def selected_cached_stocks_cip(stocks, timeframe: Timeframe) -> pd.DataFrame:
     n = len(stocks)
@@ -637,35 +695,35 @@ def selected_cached_stocks_cip(stocks, timeframe: Timeframe) -> pd.DataFrame:
     assert got <= n
     return result_df
 
+
 @func.lfu_cache(maxsize=4)
 def cached_all_stocks_cip(timeframe: Timeframe):
     all_stocks_cip = company_prices(
-        None, 
-        timeframe,
-        fields="change_in_percent",
-        missing_cb=None,
-        transpose=True
+        None, timeframe, fields="change_in_percent", missing_cb=None, transpose=True
     )
     return all_stocks_cip
 
+
 # NB: careful sizing the cache - dont want to use too much memory!
 dataframe_in_memory_cache = LFUCache(maxsize=100)
+
 
 def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     """
     To save reading parquet files and constructing each pandas dataframe, we cache all that logic
     so that repeated requests for a given tag dont hit the database. Hopefully.
     """
+
     def finalise_dataframe(df):
         """Ensure every dataframe, whether cached or not, is the same"""
-        if len(df) == 0: # dont return empty dataframes
+        if len(df) == 0:  # dont return empty dataframes
             return None
-        #print(tag, " ", stocks, " ", df.columns)
-        if tag.startswith('uber') and stocks is not None:
-            is_desired_stock = df['asx_code'].isin(set(stocks))
+        # print(tag, " ", stocks, " ", df.columns)
+        if tag.startswith("uber") and stocks is not None:
+            is_desired_stock = df["asx_code"].isin(set(stocks))
             return df[is_desired_stock]
-        elif df.columns.name == 'asx_code' and stocks is not None:
-            return df.filter(items=stocks, axis='columns')
+        elif df.columns.name == "asx_code" and stocks is not None:
+            return df.filter(items=stocks, axis="columns")
         else:
             return df
 
@@ -686,14 +744,17 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
 
     with io.BytesIO(parquet_blob) as fp:
         df = pd.read_parquet(fp)
-        dataframe_in_memory_cache[tag] = df 
+        dataframe_in_memory_cache[tag] = df
         return finalise_dataframe(df)
+
 
 def make_superdf(required_tags, stock_codes):
     assert required_tags is not None and len(required_tags) >= 1
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
-    dataframes = filter(lambda df: df is not None,
-                        [get_dataframe(tag, stock_codes) for tag in required_tags])
+    dataframes = filter(
+        lambda df: df is not None,
+        [get_dataframe(tag, stock_codes) for tag in required_tags],
+    )
     superdf = pd.concat(dataframes, axis=0)
     return superdf
 
@@ -729,7 +790,7 @@ def day_low_high(stock, all_dates=None):
 
 def impute_missing(df, method="linear"):
     assert df is not None
-    #print("impute_missing: ", df)
+    # print("impute_missing: ", df)
     if method == "linear":  # faster...
         result = df.interpolate(
             method=method, limit_direction="forward", axis="columns"
@@ -756,20 +817,31 @@ def all_etfs():
     print("Found {} ETF codes".format(len(etf_codes)))
     return etf_codes
 
+
 def increasing_eps(stock_codes, past_n_days=300):
     tf = Timeframe(past_n_days=past_n_days)
     return increasing_only_filter(stock_codes, tf, "eps")
 
+
 def increasing_yield(stock_codes, past_n_days=300):
     tf = Timeframe(past_n_days=past_n_days)
-    return increasing_only_filter(stock_codes, tf, "annual_dividend_yield", min_value=0.01)
+    return increasing_only_filter(
+        stock_codes, tf, "annual_dividend_yield", min_value=0.01
+    )
 
-def increasing_only_filter(stock_codes, timeframe: Timeframe, field: str, min_value=0.02):
+
+def increasing_only_filter(
+    stock_codes, timeframe: Timeframe, field: str, min_value=0.02
+):
     assert min_value >= 0.0
     assert timeframe is not None
 
     if timeframe.n_days < 14:
-        raise Http404("Not enough days requested to produce meaningful results: {}".format(timeframe.n_days))
+        raise Http404(
+            "Not enough days requested to produce meaningful results: {}".format(
+                timeframe.n_days
+            )
+        )
 
     # NB: we dont care here if some tags cant be found
     df = company_prices(stock_codes, timeframe, field, transpose=True).fillna(0.0)
@@ -777,11 +849,12 @@ def increasing_only_filter(stock_codes, timeframe: Timeframe, field: str, min_va
     # at least 2c per share positive max(eps) is required to be considered significant
     ret = []
     for idx, series in df.iterrows():
-        #print(series)
+        # print(series)
         if series.is_monotonic_increasing and max(series) >= min_value:
             ret.append(idx)
 
     return ret
+
 
 def get_required_tags(all_dates, fields):
     required_tags = set()
@@ -792,8 +865,10 @@ def get_required_tags(all_dates, fields):
         required_tags.add("{}-{}-{}-asx".format(fields, mm, yyyy))
     return required_tags
 
+
 def first_arg_only(*args):
     return keys.hashkey(args[0])
+
 
 def rsi_data(stock: str, timeframe: Timeframe):
     stock_df = company_prices(
@@ -803,44 +878,55 @@ def rsi_data(stock: str, timeframe: Timeframe):
         missing_cb=None,
     )
     n_dates = len(stock_df)
-    if n_dates < 14:  # RSI requires at least 14 prices to plot so reject recently added stocks
+    if (
+        n_dates < 14
+    ):  # RSI requires at least 14 prices to plot so reject recently added stocks
         raise Http404(
             "Insufficient price quotes for {} - only {}".format(stock, n_dates)
         )
-    #print(stock_df)
+    # print(stock_df)
     return stock_df
+
 
 @timing
 def company_prices(
-        stock_codes,
-        timeframe: Timeframe,
-        fields="last_price",
-        missing_cb=impute_missing, # or None if you want missing values 
-        transpose=False  # return with stocks as columns (default) or rows?
+    stock_codes,
+    timeframe: Timeframe,
+    fields="last_price",
+    missing_cb=impute_missing,  # or None if you want missing values
+    transpose=False,  # return with stocks as columns (default) or rows?
 ):
     """
     Return a dataframe with the required companies (iff quoted) over the
     specified dates. By default last_price is provided. Fields may be a list,
     in which case the dataframe has columns for each field and dates are rows (in this case only one stock is permitted)
     """
-    print("company_prices(len(stocks) == {}, {}, {}, {}, {})".format(len(stock_codes) if stock_codes is not None else stock_codes, timeframe.description, fields, missing_cb, transpose))
-   
+    print(
+        "company_prices(len(stocks) == {}, {}, {}, {}, {})".format(
+            len(stock_codes) if stock_codes is not None else stock_codes,
+            timeframe.description,
+            fields,
+            missing_cb,
+            transpose,
+        )
+    )
+
     def prepare_dataframe(df, iterable_of_fields):
         assert isinstance(df, pd.DataFrame)
-        is_ok_field = df['field_name'].isin(iterable_of_fields)
+        is_ok_field = df["field_name"].isin(iterable_of_fields)
         df = df[is_ok_field]
-        return df.pivot(index='fetch_date', columns='field_name', values='field_value')
+        return df.pivot(index="fetch_date", columns="field_name", values="field_value")
 
     if not isinstance(fields, str):  # assume iterable if not str...
         assert len(stock_codes) == 1
-        tags = get_required_tags(timeframe.all_dates(), 'uber')
+        tags = get_required_tags(timeframe.all_dates(), "uber")
         result_df = make_superdf(tags, stock_codes)
         result_df = prepare_dataframe(result_df, fields)
-        
+
         assert set(result_df.columns) == set(fields) or len(result_df) == 0
         # reject dates (ie. rows) which are all NA to avoid downstream problems eg. plotting stocks
         # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
-        result_df = result_df.dropna(how='all')
+        result_df = result_df.dropna(how="all")
         if transpose:
             return result_df.transpose()
         return result_df
@@ -848,16 +934,20 @@ def company_prices(
     # print(stock_codes)
     assert isinstance(fields, str)
     all_dates = timeframe.all_dates()
-    required_tags = get_required_tags(all_dates, 'uber')
-    #print(required_tags)
+    required_tags = get_required_tags(all_dates, "uber")
+    # print(required_tags)
     # construct a "super" dataframe from the constituent parquet data
     superdf = make_superdf(required_tags, stock_codes)
-    if 'field_name' in superdf.columns: # optional to permit easier mocking of make_superdf()
-        superdf = superdf[superdf['field_name'] == fields]
-        superdf = superdf.pivot(index='fetch_date', columns='asx_code', values='field_value')
-    
+    if (
+        "field_name" in superdf.columns
+    ):  # optional to permit easier mocking of make_superdf()
+        superdf = superdf[superdf["field_name"] == fields]
+        superdf = superdf.pivot(
+            index="fetch_date", columns="asx_code", values="field_value"
+        )
+
     # drop dates not present in all_dates to ensure we are giving just the results requested
-    superdf = superdf.filter(items=all_dates, axis='index')
+    superdf = superdf.filter(items=all_dates, axis="index")
 
     # dont transpose for performance by default
     if transpose:
@@ -865,8 +955,10 @@ def company_prices(
 
     # impute missing if caller wants it (and missing values present)
     if missing_cb is not None and superdf.isnull().values.any():
-        if missing_cb == impute_missing and fields == 'change_in_percent':
-            print("WARNING: fields == change_in_percent with impute_missing() is likely nonsensical")
+        if missing_cb == impute_missing and fields == "change_in_percent":
+            print(
+                "WARNING: fields == change_in_percent with impute_missing() is likely nonsensical"
+            )
         superdf = missing_cb(superdf)
     return superdf
 
@@ -893,7 +985,7 @@ class MarketDataCache(model.Model):
     dataframe = model.BinaryField()
 
     objects = DjongoManager()
-    
+
     class Meta:
         managed = False  # table is managed by persist_dataframes.py
         db_table = "market_quote_cache"
@@ -918,13 +1010,20 @@ class VirtualPurchase(model.Model):
         if quote is None:
             raise ValueError()
         buy_price = self.price_at_buy_date
-        pct_move = (quote.last_price / buy_price) * 100.0 - 100.0 if buy_price > 0.0 else 0.0
+        pct_move = (
+            (quote.last_price / buy_price) * 100.0 - 100.0 if buy_price > 0.0 else 0.0
+        )
         return (self.n * quote.last_price, pct_move)
 
     def __str__(self):
         cur_price, pct_move = self.current_price()
         return "Purchase on {}: ${} ({} shares@${:.2f}) is now ${:.2f} ({:.2f}%)".format(
-            self.buy_date, self.amount, self.n, self.price_at_buy_date, cur_price, pct_move
+            self.buy_date,
+            self.amount,
+            self.n,
+            self.price_at_buy_date,
+            cur_price,
+            pct_move,
         )
 
     class Meta:
@@ -945,22 +1044,146 @@ def user_purchases(user):
         if not code in watchlist:
             continue
         purchases[code].append(purchase)
-    #print("Found virtual purchases for {} stocks".format(len(purchases)))
+    # print("Found virtual purchases for {} stocks".format(len(purchases)))
     return purchases
 
 
+# class Profile(model.Model):
+#     """User profile model for defaults for various analyses and visualisations"""
+#     user = model.OneToOneField(get_user_model(), on_delete=model.CASCADE)
+#     timeframe_in_days = model.IntegerField(validators=[MinValueValidator(10), MaxValueValidator(100000)], default=180) # for plots/analyses were default is permissable
+#     line_size = model.FloatField(validators=[MinValueValidator(0.5), MaxValueValidator(10.0)], default=1.5) # for line based plots
 
-class Profile(model.Model):
-    """User profile model for defaults for various analyses and visualisations"""
-    user = model.OneToOneField(get_user_model(), on_delete=model.CASCADE)
-    timeframe_in_days = model.IntegerField(validators=[MinValueValidator(10), MaxValueValidator(100000)], default=180) # for plots/analyses were default is permissable
-    line_size = model.FloatField(validators=[MinValueValidator(0.5), MaxValueValidator(10.0)], default=1.5) # for line based plots
+#     objects = DjongoManager()
 
-@receiver(post_save, sender=get_user_model())
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        Profile.objects.create(user=instance)
+#     class Meta:
+#         db_table = "user_profiles"
 
-@receiver(post_save, sender=get_user_model())
-def save_user_profile(sender, instance, **kwargs):
-    instance.profile.save()
+# @receiver(post_save, sender=get_user_model())
+# def create_user_profile(sender, instance, created, **kwargs):
+#     if not created:
+#         Profile.objects.create(user=instance)
+
+# @receiver(post_save, sender=get_user_model())
+# def save_user_profile(sender, instance, **kwargs):
+#     instance.profile.save()
+
+
+class WorldBankCountry(model.Model):
+    """
+    Not strictly a country, can include regions eg. africa ex-warzones
+    """
+
+    id = ObjectIdField(primary_key=True, db_column="_id")
+    country_code = model.TextField()
+    name = model.TextField()
+    last_updated = model.DateTimeField(auto_now_add=True)
+
+    objects = DjongoManager()
+
+    class Meta:
+        db_table = "world_bank_countries"
+        verbose_name_plural = "World Bank Countries"
+
+
+@func.lru_cache(maxsize=100)
+def get_parquet(tag: str, model=MarketDataCache) -> pd.DataFrame:
+    assert len(tag) > 0
+    cache_entry = model.objects.filter(tag=tag).first()
+    if cache_entry is not None:
+        return cache_entry.dataframe
+    return None
+
+
+class WorldBankTopic(model.Model):
+    id = model.IntegerField(null=False, blank=False, primary_key=True)
+    topic = model.TextField(null=False, blank=False)
+    source_note = model.TextField(null=False, blank=False)
+    last_updated = model.DateTimeField(auto_now_add=True)
+
+    objects = DjongoManager()
+
+    def __init__(self, *args, **kwargs):  # support initialization via ArrayField
+        topic = kwargs.pop("value", None)
+        source_note = kwargs.pop("sourceNote", None)
+        extra_args = {}
+        if topic is not None:
+            extra_args["topic"] = topic
+        if source_note is not None:
+            extra_args["source_note"] = source_note
+        super(WorldBankTopic, self).__init__(*args, **kwargs, **extra_args)
+
+    class Meta:
+        db_table = "world_bank_topics"
+
+
+class WorldBankInvertedIndex(model.Model):
+    id = ObjectIdField(primary_key=True, db_column="_id")
+    country = model.TextField()
+    topic_id = model.IntegerField()
+    topic_name = model.TextField()
+    n_attributes = model.IntegerField()
+    last_updated = model.DateTimeField()
+    tag = model.TextField()
+    indicator_id = model.TextField() # xref into WorldBankIndicators.wb_id
+    indicator_name = model.TextField() # likewise to name field
+
+    objects = DjongoManager()
+
+    class Meta:
+        db_table = "world_bank_inverted_index"
+        verbose_name_plural = "World Bank Inverted Indexes"
+
+class WorldBankDataCache(model.Model): # a minimal model because i stuffed up the table name when ingesting worldbank data
+    tag = model.TextField(null=False)
+    dataframe = model.BinaryField()
+
+    class Meta:
+        db_table = "market_data_cache"
+
+class WorldBankIndicators(model.Model):
+    id = ObjectIdField(primary_key=True, db_column='_id')
+    wb_id = model.TextField()  # world bank id, not to be confused with django id/pk
+    name = model.TextField()
+    last_updated = model.DateTimeField(auto_now_add=True)
+    unit = model.TextField()
+    source = JSONField()
+    source_note = model.TextField()
+    topics = ArrayField(WorldBankTopic)
+    source_organisation = model.TextField()
+    last_successful_data = model.DateTimeField(null=True)
+    last_error_when = model.DateTimeField(null=True) # date of last ingest error for this indicator (or None if not known)
+    last_error_msg = model.TextField()  # eg. Error code 175
+    last_error_type = model.TextField() # eg. class RuntimeError
+
+    objects = DjongoManager()
+
+    def __init__(self, *args, **kwargs):
+        wb_id = kwargs.pop("id", None)
+        source_organisation = kwargs.pop("sourceOrganization", None)
+        source_note = kwargs.pop("sourceNote", None)
+        # wb_id=wb_id, source_organisation=source_organisation, source_note=source_note
+        super(WorldBankIndicators, self).__init__(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.wb_id} {self.name} {self.source} last_error_when={self.last_error_when} last_updated={self.last_updated}"
+
+    @property
+    def tag(self): # NB: must match the ingest_worldbank_datasets.py tag name...
+        return f"{self.wb_id}-yearly-dataframe"
+
+    @property
+    def has_data(self):
+        obj = MarketDataCache.objects.filter(tag=self.tag).first()
+        return obj is not None
+
+    def fetch_data(self) -> pd.DataFrame:
+        t = self.tag
+        print(f"Fetching parquet dataframe for {t}")
+        return get_parquet(t, model=WorldBankDataCache)
+   
+    class Meta:
+        db_table = "world_bank_indicators"
+        verbose_name = 'World Bank Metric'
+        verbose_name_plural = 'World Bank Metrics'
+

@@ -3,7 +3,7 @@ from django.views.generic.edit import FormView
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from app.forms import OptimisePortfolioForm, OptimiseSectorForm
-from app.messages import info
+from app.messages import info, warning
 from app.models import Timeframe, all_sector_stocks, all_etfs, validate_user, selected_cached_stocks_cip, user_watchlist, Sector
 from app.views.core import show_companies
 from app.analysis import detect_outliers, optimise_portfolio
@@ -51,14 +51,11 @@ class OptimisedWatchlistView(
                 performance,
                 efficient_frontier_plot,
                 correlation_plot,
-                messages,
                 title,
                 portfolio_cost,
                 leftover_funds,
                 n_stocks,
             ) = self.results
-            for msg in messages:
-                info(self.request, msg)
             total_pct_cw = sum(map(lambda t: t[1], cleaned_weights.values())) * 100.0
             #print(cleaned_weights)
             total_profit = sum(map(lambda t: t[5], cleaned_weights.values()))
@@ -105,7 +102,8 @@ class OptimisedWatchlistView(
                                   self.timeframe,
                                   algo=algo,
                                   total_portfolio_value=portfolio_cost, 
-                                  exclude_price=exclude_price)
+                                  exclude_price=exclude_price, 
+                                  warning_cb=lambda msg: warning(self.request, msg))
         return render(self.request, self.template_name, self.get_context_data())
 
 optimised_watchlist_view = OptimisedWatchlistView.as_view()

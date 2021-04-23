@@ -14,9 +14,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.conf import settings
+from django.conf import settings, urls
 from django.urls import path, include
 from app.views import * # pylint: disable=wildcard-import
+
 
 urlpatterns = [
     path("accounts/", include("django.contrib.auth.urls")),
@@ -66,8 +67,11 @@ urlpatterns = [
         name="show-optimised-sector",
     ),
     path("show/optimized/etfs/", optimised_etf_view, name="show-optimised-etfs"),
-    path("cluster/kmeans/<str:stocks>", cluster_stocks_view, name="cluster-stocks-view")
+    path("cluster/kmeans/<str:stocks>", cluster_stocks_view, name="cluster-stocks-view"),
+    path("worldbank/scsm", WorldBankSCSMView.as_view(), name="worldbank-scsm-view"),
+    path("worldbank/", worldbank_index_view, name="worldbank-data-view"),
 
+    path('ajax/autocomplete/indicator', ajax_autocomplete_indicator_view, name="ajax-worldbank-indicator-autocomplete-view")
 ]
 
 

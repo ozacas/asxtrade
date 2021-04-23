@@ -174,7 +174,7 @@ def rule_at_end_of_daily_range(state: dict):
             return -1
         # else FALLTHRU...
     except KeyError:
-        stock = state.get('stock')
+        #stock = state.get('stock')
         state['bad_days'] += 1
     return 0
 
@@ -297,7 +297,7 @@ def ef_minvol_strategy(returns=None, cov_matrix=None):
     weights = ef.min_volatility()
     return weights, portfolio_performance(ef), ef
 
-def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, messages, min_price):
+def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, min_price, warning_cb):
     """
     Remove stocks which have no data at start/end of the timeframe despite imputation that has been performed. 
     This ensures that profit/loss can be calculated without missing data and that optimisation is not biased towards ridiculous outcomes.
@@ -307,14 +307,16 @@ def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, messages, min_price)
     missing_prices = list(df.columns[df.loc[date_to_check].isna()])
     if len(missing_prices) > 0:
         df = df.drop(columns=missing_prices)
-        messages.add("Ignoring stocks with no data at {}: {}".format(date_to_check, missing_prices))
+        if warning_cb:
+            warning_cb("Ignoring stocks with no data at {}: {}".format(date_to_check, missing_prices))
     if min_price is not None:
         bad_prices = list(df.columns[df.loc[date_to_check] <= min_price])
-        messages.add(f"Ignoring stocks with price < {min_price} at {date_to_check}: {bad_prices}")
+        if warning_cb:
+            warning_cb(f"Ignoring stocks with price < {min_price} at {date_to_check}: {bad_prices}")
         df = df.drop(columns=bad_prices)
     return df
  
-def setup_optimisation_matrices(stocks, timeframe: Timeframe, messages, exclude_price):
+def setup_optimisation_matrices(stocks, timeframe: Timeframe, exclude_price, warning_cb):
      # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
     
     stock_prices = company_prices(stocks, timeframe, fields='last_price', missing_cb=None)
@@ -323,8 +325,8 @@ def setup_optimisation_matrices(stocks, timeframe: Timeframe, messages, exclude_
     earliest_date = stock_prices.index[0]
     #print(stock_prices)
 
-    stock_prices = remove_bad_stocks(stock_prices, earliest_date, messages, exclude_price)
-    stock_prices = remove_bad_stocks(stock_prices, latest_date, messages, exclude_price)
+    stock_prices = remove_bad_stocks(stock_prices, earliest_date, exclude_price, warning_cb)
+    stock_prices = remove_bad_stocks(stock_prices, latest_date, exclude_price, warning_cb)
 
     latest_prices = stock_prices.loc[latest_date]
     first_prices = stock_prices.loc[earliest_date]
@@ -385,68 +387,71 @@ def select_suitable_stocks(all_returns, stock_prices, max_stocks, n_unique_min, 
     n_stocks = max_stocks if len(colnames) > max_stocks else len(colnames)
     return filtered_stocks, n_stocks
 
-def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000, exclude_price=None):
+def run_iteration(title, strategy, first_prices, latest_prices, total_portfolio_value, n_stocks, mu, s, filtered_stocks, **kwargs):
+    weights, performance_dict, _ = strategy(**kwargs)
+    allocator = DiscreteAllocation(weights,
+                                   first_prices,
+                                   total_portfolio_value=total_portfolio_value)
+    fig, ax = plt.subplots()
+    portfolio, leftover_funds = allocator.greedy_portfolio()
+    #print(portfolio)
+    cleaned_weights = clean_weights(weights, portfolio, first_prices, latest_prices)
+    
+    # disabled due to TypeError during deepcopy of OSQP results object
+    #if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
+    #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
+    volatility = performance_dict.get('volatility')
+    expected_return = performance_dict.get('expected return')
+    ax.scatter(volatility, expected_return, marker="*", s=100, c="r", label="Portfolio")
+    ax.set_xlabel("Volatility")
+    ax.set_ylabel("Returns (%)")
+
+    # Generate random portfolios
+    n_samples = 10000
+    w = np.random.dirichlet(np.ones(n_stocks), n_samples)
+    rets = w.dot(mu)
+    stds = np.sqrt(np.diag(w @ s @ w.T))
+    sharpes = rets / stds
+    ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
+
+    # Output
+    ax.set_title(title)
+    ax.legend()
+    plt.tight_layout()
+    fig = plt.gcf()
+
+    # NB: we dont bother caching these plots since we must calculate so many other values but we need to serve them via cache_plot() anyway
+    efficient_frontier_plot = cache_plot(secrets.token_urlsafe(32), lambda: fig)
+
+    # only plot covmatrix/corr for significant holdings to ensure readability
+    m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())[:30]]).ledoit_wolf()
+    #print(m)
+    cor_plot = plot_covariance(m, plot_correlation=True)
+    
+    correlation_plot = cache_plot(secrets.token_urlsafe(32), lambda: cor_plot.figure)
+    assert isinstance(cleaned_weights, OrderedDict)
+    return cleaned_weights, performance_dict, \
+            efficient_frontier_plot, correlation_plot, \
+            title, total_portfolio_value, leftover_funds, len(latest_prices)
+  
+
+def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000, exclude_price=None, warning_cb=None):
     assert len(stocks) >= 1
     assert timeframe is not None
     assert total_portfolio_value > 0
     assert max_stocks >= 5
 
-    messages = set()
-    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe, messages, exclude_price)
+    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe, exclude_price, warning_cb)
     for t in ((10, 0.0001), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
         filtered_stocks, n_stocks = select_suitable_stocks(all_returns, stock_prices, max_stocks, *t)
         strategy, title, kwargs, mu, s = assign_strategy(filtered_stocks, algo, n_stocks)
-       
-        try: 
-            weights, performance_dict, _ = strategy(**kwargs)
-            allocator = DiscreteAllocation(weights,
-                                           first_prices,
-                                           total_portfolio_value=total_portfolio_value)
-            fig, ax = plt.subplots()
-            portfolio, leftover_funds = allocator.greedy_portfolio()
-            #print(portfolio)
-            cleaned_weights = clean_weights(weights, portfolio, first_prices, latest_prices)
-          
-            # disabled due to TypeError during deepcopy of OSQP results object
-            #if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
-            #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
-            volatility = performance_dict.get('volatility')
-            expected_return = performance_dict.get('expected return')
-            ax.scatter(volatility, expected_return, marker="*", s=100, c="r", label="Portfolio")
-            ax.set_xlabel("Volatility")
-            ax.set_ylabel("Returns (%)")
-        
-            # Generate random portfolios
-            n_samples = 10000
-            w = np.random.dirichlet(np.ones(n_stocks), n_samples)
-            rets = w.dot(mu)
-            stds = np.sqrt(np.diag(w @ s @ w.T))
-            sharpes = rets / stds
-            ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
-
-            # Output
-            ax.set_title(title)
-            ax.legend()
-            plt.tight_layout()
-            fig = plt.gcf()
-
-            # NB: we dont bother caching these plots since we must calculate so many other values but we need to serve them via cache_plot() anyway
-            efficient_frontier_plot = cache_plot(secrets.token_urlsafe(32), lambda: fig)
-        
-            # only plot covmatrix/corr for significant holdings to ensure readability
-            m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())[:30]]).ledoit_wolf()
-            #print(m)
-            cor_plot = plot_covariance(m, plot_correlation=True)
-            
-            correlation_plot = cache_plot(secrets.token_urlsafe(32), lambda: cor_plot.figure)
-            assert isinstance(cleaned_weights, OrderedDict)
-            return cleaned_weights, performance_dict, \
-                   efficient_frontier_plot, correlation_plot, messages, \
-                   title, total_portfolio_value, leftover_funds, len(latest_prices)
+        try:
+            return run_iteration(title, strategy, first_prices, latest_prices, total_portfolio_value, n_stocks, mu, s, filtered_stocks, **kwargs)
         except ValueError as ve:
-            messages.add("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(t[0], t[1], n_stocks, str(ve)))
+            if warning_cb:
+                warning_cb("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(t[0], t[1], n_stocks, str(ve)))
             # try next iteration
-
+        
     print("*** WARNING: unable to optimise portolio!")
-    return (None, None, None, None, messages, title, total_portfolio_value, 0.0, len(latest_prices))
+    return (None, None, None, None, title, total_portfolio_value, 0.0, len(latest_prices))
 

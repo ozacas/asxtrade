@@ -105,6 +105,8 @@ This new data may not appear in the application until the cache entries expire (
  | Market sentiment | ![Pic](https://user-images.githubusercontent.com/11968760/91778464-e48ba400-ec35-11ea-9b47-413601da6fd8.png#thumbnail)|
  | Performance by sector | ![Pic](https://user-images.githubusercontent.com/11968760/110228446-6a760800-7f55-11eb-9041-786e6d145817.png#thumbnail)|
  | Portfolio optimisation | ![Pic](https://user-images.githubusercontent.com/11968760/110228663-e7ee4800-7f56-11eb-8b7d-edd3a09d7b29.png#thumbnail)
+ | World Bank API data: macro-economic outlook for many countries | |
+
 
 ## Testing
 
@@ -123,3 +125,20 @@ $ ls htmlcov
 
 Use of the Django Debug Toolbar is strongly recommended, but it does have a known limitation which prevents usage during normal operation due to the use of pandas within asxtrade: see <https://github.com/jazzband/django-debug-toolbar/issues/1053> for details. For this reason, the MIDDLEWARE setting for
 the toolbar is commented out, except when needed.
+
+### World Bank API data support (experimental)
+
+Recent releases include support for API data integration using the excellent [wbdata](https://pypi.org/project/wbdata/), persisting the data to parquet format in the mongo database for the app. A utility script is provided to download this data: but it works very slowly to be nice to the Internet (only 2 datasets per minute). At that rate
+it would take over a week to download the entire dataset of nearly 18000 dataframes! Only year-based datasets are currently supported.
+
+~~~~
+python3 ingest_worldbank_datasets.py --help
+~~~~
+
+This program builds an inverted index of the WorldBank data, to speed searching via `Show -> World Bank` data on the left-side. Three different analyses are possible:
+
+ 1. A single metric for a single country, each year
+ 2. A single metric for several countries
+ 3. Many metrics for a single country
+
+Each analysis comes with its own visualisations and features. 

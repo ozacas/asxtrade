@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
-from app.models import all_sector_stocks
+from app.models import all_sector_stocks, WorldBankIndicators
+from typing import Iterable
 
 def is_not_blank(value):
     if value is None or len(value) < 1 or len(value.strip()) < 1:
@@ -124,3 +125,19 @@ class OptimiseSectorForm(OptimisePortfolioForm):
 class MarketCapSearchForm(forms.Form):
     min_cap = forms.IntegerField(min_value=0, initial=10, label="Minimum market cap ($AUD millions)")
     max_cap = forms.IntegerField(min_value=0, initial=100, label="Maximum market cap ($AUD millions)")
+
+
+class DynamicChoiceField(forms.ChoiceField):
+    def valid_value(self, value): # dont validate here since DOM generated... later
+        return True
+
+class WorldBankSCSMForm(forms.Form): # SCSM == single country, single metric
+    country = forms.ChoiceField(choices=(), required=True)
+    topic = forms.ChoiceField(choices=(), required=True)
+    indicator = DynamicChoiceField(choices=(), validators=[], required=True)  # populated dynamically via AJAX in response to current topic
+
+    def __init__(self, countries: Iterable[tuple], topics: Iterable[tuple], indicators: Iterable[tuple], **kwargs):
+        super(WorldBankSCSMForm, self).__init__(**kwargs)
+        self.fields['country'].choices = countries
+        self.fields['topic'].choices = topics
+        self.fields['indicator'].choices = indicators

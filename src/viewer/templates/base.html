@@ -35,38 +35,42 @@
             </ul>
         </nav>
 
-        <table><tr valign="top"><td>
-            <div class="menubar">
-                <h3>Find</h3>
-                <ul class="nav flex-column">{% menu search %}
-                    {% for item in menuitems %}
-                      <li class="nav-item">
-                        <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
-                      </li>
-                    {% endfor %}
-                </ul>
-                <h3>Show</h3>
-                <ul class="nav flex-column">{%menu stats %}
-                    {% for item in menuitems %}
-                      <li class="nav-item">
-                        <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
-                      </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </td><td>
-            <div class="content container">
-                <div class="row">
-                    {%if title %}<h3>{{ title }}</h3>{% endif %}
+        <table>
+          <tr valign="top">
+            <td>
+                <div class="menubar">
+                    <h3>Find</h3>
+                    <ul class="nav flex-column">{% menu search %}
+                        {% for item in menuitems %}
+                          <li class="nav-item">
+                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                          </li>
+                        {% endfor %}
+                    </ul>
+                    <h3>Show</h3>
+                    <ul class="nav flex-column">{%menu stats %}
+                        {% for item in menuitems %}
+                          <li class="nav-item">
+                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"{% if item.current %} class='current'{% endif %}>{{ item.title }}</a>
+                          </li>
+                        {% endfor %}
+                    </ul>
                 </div>
-
-                {% block searchform %}
-                {% endblock %}
-
-                {% block content %}
-                {% endblock %}
-            </div>
-        </td></tr>
+            </td>
+            <td>
+                <div class="content container">
+                    <div class="row">
+                        {%if title %}<h3>{{ title }}</h3>{% endif %}
+                    </div>
+          
+                    {% block searchform %}
+                    {% endblock %}
+            
+                    {% block content %}
+                    {% endblock %}
+                </div>
+            </td>
+          </tr>
       </table>
     </body>
 </html>
