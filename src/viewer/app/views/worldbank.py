@@ -17,6 +17,7 @@ import pandas as pd
 from app.data import cache_plot
 from app.models import WorldBankIndicators, WorldBankCountry, WorldBankTopic, WorldBankInvertedIndex
 from app.forms import WorldBankSCSMForm, WorldBankSCMForm, WorldBankSCMMForm
+from app.plots import label_shorten
 
 @login_required
 def worldbank_index_view(request):
@@ -42,7 +43,7 @@ def indicator_autocomplete_hits(country_codes: Iterable[str], topic_id: int, as_
         n_countries = len(country_set)
         #print(f"Topic ID: {topic_id}")
         print(f"Country set: {country_set}")
-        #records = WorldBankInvertedIndex.objects.filter(topic_id=topic_id, country__in=country_set)
+        records = WorldBankInvertedIndex.objects.filter(topic_id=topic_id, country__in=country_set)
         # show only those indicators FOR WHICH ALL SPECIFIED COUNTRIES are available
         countries_by_indicator = defaultdict(set)
         for r in records:
@@ -86,9 +87,13 @@ def ajax_autocomplete_scsm_view(request):
 def ajax_autocomplete_scm_view(request):
     assert request.method == 'GET'
     topic_id = request.GET.get('topic_id', None)
-    country_codes = request.GET.get('country', '').split(",")
-    assert isinstance(country_codes, list)
-    hits, current_id = indicator_autocomplete_hits(country_codes, topic_id)
+    country_codes = list(filter(lambda v: len(v) > 0, request.GET.get('country', '').split(",")))
+    
+    if len(country_codes) > 0:
+        hits, current_id = indicator_autocomplete_hits(country_codes, topic_id)
+    else:
+        hits = []
+        current_id = None
     return render(request, "autocomplete_indicators.html", context={ 'hits': hits, "current_id": current_id })
 
 def ajax_autocomplete_scmm_view(request):
@@ -112,7 +117,10 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView):
         data = kwargs.get('data', {})
         selected_country = data.get('country', None)
         selected_topic = data.get('topic', None)
-        indicators_as_tuples, current_id = indicator_autocomplete_hits([selected_country], selected_topic, as_select_tuples=True)
+        if selected_topic is not None and selected_country is not None:
+            indicators_as_tuples, current_id = indicator_autocomplete_hits([selected_country], selected_topic, as_select_tuples=True)
+        else:
+            indicators_as_tuples = []
         return form_class(countries_as_tuples, topics_as_tuples, indicators_as_tuples, **kwargs)
 
     def plot_indicator(self, country: WorldBankCountry, topic: WorldBankTopic, indicator: WorldBankIndicators) -> str:
@@ -149,7 +157,7 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView):
             "title": "World Bank data - single country, single metric",
             "country": country,
             "topic": topic,
-            "indicator_autocomplete_uri": reverse('ajax-worldbank-indicator-autocomplete-view'),
+            "indicator_autocomplete_uri": reverse('ajax-worldbank-scsm-autocomplete'),
             "indicator_plot_uri": self.plot_indicator(country, topic, indicator),
             "indicator_plot_title": f"Graphic: {indicator.name}",
             "indicator": indicator
@@ -259,22 +267,23 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
                 plot_df = plot_df.append(df)
 
         #print(plot_df)
-        plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset", colour="metric"))
+        plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset"))
                  + p9.geom_line(size=1.2) 
                  + p9.theme_classic()
                  + p9.facet_wrap('~dataset', ncol=1, scales="free_y")
                  + p9.theme(figure_size=(12, n_datasets * 1.5))
+                 + p9.scale_y_continuous(labels=label_shorten)
         )
         if has_yearly: # any indicator yearly? if so, then we'll label them all with years only on the plot
             plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
         indicator_id_str = "-".join([i.wb_id for i in indicators])
-        return cache_plot(f"{country}-{indicator_id_str}-scmm-worldbank-plot", lambda: plot)
+        return cache_plot(f"{country}-{indicator_id_str}-scmm-worldbank-plot", lambda: plot, dont_cache=True)
 
     def form_valid(self, form):
         selected_country = form.cleaned_data.get('country', None)
         selected_topic = form.cleaned_data.get('topic', None)
         selected_indicators = form.cleaned_data.get('indicators', [])
-        print(selected_indicators)
+        #print(selected_indicators)
 
         topic = WorldBankTopic.objects.filter(id=selected_topic).first()
         if topic is None:

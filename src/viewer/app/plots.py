@@ -821,3 +821,21 @@ def plot_sector_field(df: pd.DataFrame, field, n_col=3):
 
     return plot
 
+
+def label_shorten(labels):
+    labels = [str(l) for l in labels]
+    non_zero_labels = filter(lambda v: v != "0", labels)
+    for units, short_label in [("000000000000", "T."), ("000000000", "B."), ("000000", "M.")]:
+        found_cnt = 0
+        for l in non_zero_labels:
+            if l.endswith(units):
+                found_cnt += 1
+        if found_cnt == len(non_zero_labels):
+            new_labels = []
+            for old_label in labels:
+                base_label = old_label[0:-len(units)]
+                new_label = base_label + short_label
+                new_labels.append(new_label)
+            return new_labels
+    # no way to consistently shorten labels? ok, return supplied labels
+    return labels

@@ -4,12 +4,13 @@
 {% block searchform %}
     <table>
         <tr><td>
-        <form action="{{ action_url }}" method="POST" id="WorldBankForm" indicator-autocomplete-uri="{% url 'ajax-worldbank-scmm-autocomplete' %}">
-            {% csrf_token %}
-            {{ form.as_table }}
-            <tr><td></td><td><input type="submit" value="Submit"></td></tr>
-        </form></td><td>
-        <span id="loading"></span></td></tr>
+            <form action="{{ action_url }}" method="POST" id="WorldBankForm" indicator-autocomplete-uri="{% url 'ajax-worldbank-scmm-autocomplete' %}">
+                {% csrf_token %}
+                {{ form.as_table }}
+                <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+            </form></td><td>
+            <span id="loading"></span>
+        </td></tr>
     </table>
 {% endblock %}
 
