@@ -243,6 +243,11 @@ if __name__ == "__main__":
         purge_all_worldbank_data(db)
         print("All existing worldbank data removed from DB")
     
+    # https://github.com/OliverSherouse/wbdata/issues/23 suggested fix as caching by default yields poor performance
+    def inner():
+        pass
+    wb.fetcher.CACHE.sync = inner
+    db.world_bank_indicators.create_index([('name', 'text'), ('source_note', 'text')])
     print("Processing {} datasets...".format(len(indicators.keys())))
     # TODO FIXME: add transaction support using pymongo
     for wb_id, i in indicators.items():
