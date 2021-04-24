@@ -19,12 +19,11 @@
 
    <img src="/png/{{ indicator_plot_uri }}" alt="Indicator plot">
 
-   <p>
-       Data source: {{ indicator.source_organisation }}
-   </p>
-
-   <p>
-       {{ indicator.source_note }}
-   </p>
+   <table>
+       <tr><th>Tag</th><th>Organisation</th><th>Source note</th></tr>
+       {% for i in indicator_plot_datasets %}
+       <tr><td>{{ i.wb_id }}</td><td class="small">{{ i.source_organisation }}</td><td class="small">{{ i.source_note }}</td></tr>
+       {% endfor %}
+   </table>
    {% endif %}
 {% endblock %}

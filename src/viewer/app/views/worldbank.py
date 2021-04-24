@@ -290,5 +290,6 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
             "indicator_autocomplete_uri": reverse('ajax-worldbank-scmm-autocomplete'),
             "indicator_plot_uri": self.plot_multiple_metrics(country.name, topic, indicators),
             "indicator_plot_title": f"Graphic: {n_indicators} metrics for {country.name}",
+            "indicator_plot_datasets": indicators,
         })
         return render(self.request, self.template_name, context=context)
