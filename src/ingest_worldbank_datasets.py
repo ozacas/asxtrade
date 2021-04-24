@@ -259,6 +259,10 @@ if __name__ == "__main__":
                 raise ValueError('No data')
             df, metadata = fix_dataframe(i, df, countries, tag)
             #print(metadata)
+            if df is None or len(df) == 0:
+                print(f"WARNING: no data associated with {wb_id}")
+                continue
+
             save_dataframe(db, i, df, tag)
             
             save_inverted_index(db, metadata, df, i, tag, countries)
