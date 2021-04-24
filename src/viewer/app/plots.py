@@ -221,7 +221,7 @@ def plot_portfolio_stock_performance(data_factory: Callable[[], pd.DataFrame], f
             return 1.0
         elif val > 3000.0:
             return 0.7
-        elif val < 500.0: # stocks which a breakeven are very transparent
+        elif val < 500.0: # stocks which are roughly breakeven are very transparent
             return 0.2
         else:
             return 0.5

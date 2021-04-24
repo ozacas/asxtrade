@@ -14,7 +14,7 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.conf import settings, urls
+from django.conf import settings
 from django.urls import path, include
 from app.views import * # pylint: disable=wildcard-import
 
@@ -69,9 +69,13 @@ urlpatterns = [
     path("show/optimized/etfs/", optimised_etf_view, name="show-optimised-etfs"),
     path("cluster/kmeans/<str:stocks>", cluster_stocks_view, name="cluster-stocks-view"),
     path("worldbank/scsm", WorldBankSCSMView.as_view(), name="worldbank-scsm-view"),
+    path("worldbank/scm", WorldBankSCMView.as_view(), name="worldbank-scm-view"),
+    path("worldbank/scmm", WorldBankSCMMView.as_view(), name="worldbank-scmm-view"),
     path("worldbank/", worldbank_index_view, name="worldbank-data-view"),
 
-    path('ajax/autocomplete/indicator', ajax_autocomplete_indicator_view, name="ajax-worldbank-indicator-autocomplete-view")
+    path('ajax/autocomplete/scsm', ajax_autocomplete_scsm_view, name="ajax-worldbank-scsm-autocomplete"),
+    path('ajax/autocomplete/scm', ajax_autocomplete_scm_view, name='ajax-worldbank-scm-autocomplete'),
+    path('ajax/autocomplete/scmm', ajax_autocomplete_scmm_view, name='ajax-worldbank-scmm-autocomplete')
 ]
 
 
