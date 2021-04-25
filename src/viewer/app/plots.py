@@ -822,9 +822,19 @@ def plot_sector_field(df: pd.DataFrame, field, n_col=3):
     return plot
 
 
-def label_shorten(labels):
-    labels = [str(l) for l in labels]
-    non_zero_labels = filter(lambda v: v != "0", labels)
+def label_shorten(labels: Iterable[float]) -> Iterable[str]:
+    """
+    For large numbers we report them removing all the zeros and replacing with billions/millions/trillions as appropriate.
+    This is only done if all labels in the plot end with zeros and all are sufficiently long to have enough zeros. Otherwise labels are untouched.
+    """
+    str_labels = []
+    for v in labels:
+        str_labels.append(str(int(v)) if abs(v) > 100000.0 else str(v))  # NB: some plots have negative value tick marks, so we must handle it
+    #print(str_labels)
+    is_non_zero_lambda = lambda v: v not in ("0", "0.0")
+    non_zero_labels = list(filter(is_non_zero_lambda, str_labels))
+    #print(non_zero_labels)
+
     for units, short_label in [("000000000000", "T."), ("000000000", "B."), ("000000", "M.")]:
         found_cnt = 0
         for l in non_zero_labels:
@@ -832,10 +842,15 @@ def label_shorten(labels):
                 found_cnt += 1
         if found_cnt == len(non_zero_labels):
             new_labels = []
-            for old_label in labels:
-                base_label = old_label[0:-len(units)]
-                new_label = base_label + short_label
-                new_labels.append(new_label)
+            for old_label in str_labels:
+                #print(old_label)
+                #print(units)
+                if is_non_zero_lambda(old_label):
+                    base_label = old_label[0:-len(units)]
+                    new_label = base_label + short_label
+                    new_labels.append(new_label)
+                else:
+                    new_labels.append(old_label)
             return new_labels
     # no way to consistently shorten labels? ok, return supplied labels
     return labels

@@ -12,6 +12,12 @@
             <span id="loading"></span>
         </td></tr>
     </table>
+
+     <!-- IDs below must match form ID's above -->
+     <script>
+        $("#id_topic").on("change", world_bank_ajax_call);
+        $("#id_country").on("change", world_bank_ajax_call);
+    </script>
 {% endblock %}
 
 {% block content %}

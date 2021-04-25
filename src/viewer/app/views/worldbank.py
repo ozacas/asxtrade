@@ -103,7 +103,7 @@ def ajax_autocomplete_scmm_view(request):
     hits, current_id = indicator_autocomplete_hits([country_code], topic_id)
     return render(request, "autocomplete_indicators.html", context={'hits': hits, 'current_id': current_id})
 
-class WorldBankSCSMView(LoginRequiredMixin, FormView):
+class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single metric (indicator) the easiest to start with
     action_url = '/worldbank/scsm'
     form_class = WorldBankSCSMForm
     template_name = "world_bank_scsm.html"
@@ -124,20 +124,23 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView):
         return form_class(countries_as_tuples, topics_as_tuples, indicators_as_tuples, **kwargs)
 
     def plot_indicator(self, country: WorldBankCountry, topic: WorldBankTopic, indicator: WorldBankIndicators) -> str:
-        df = fetch_data(indicator, [country.name])
-        if df is None:
-            print(f"No usable data/plot for {indicator.name}")
-            raise Http404(f"No data for {country.name} found in {indicator.wb_id}")
+        def make_plot():
+            df = fetch_data(indicator, [country.name])
+            if df is None:
+                print(f"No usable data/plot for {indicator.name}")
+                raise Http404(f"No data for {country.name} found in {indicator.wb_id}")
 
-        plot = ( p9.ggplot(df, p9.aes("date", "metric"))
-                + p9.geom_line(size=1.2) 
-                + p9.theme_classic()
-                + p9.labs(x="", y="Value", title=indicator.name)
-                + p9.theme(figure_size=(12, 6))
-        )
-        if "-yearly-" in indicator.tag:
-            plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
-        return cache_plot(f"{indicator.wb_id}-worldbank-plot", lambda: plot)
+            plot = ( p9.ggplot(df, p9.aes("date", "metric"))
+                    + p9.geom_line(size=1.2) 
+                    + p9.theme_classic()
+                    + p9.labs(x="", y="Value", title=indicator.name)
+                    + p9.theme(figure_size=(12, 6))
+                    + p9.scale_y_continuous(labels=label_shorten)
+            )
+            if "-yearly-" in indicator.tag:
+                plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+            return plot
+        return cache_plot(f"{indicator.wb_id}-{country.name}-scsm-worldbank-plot", make_plot)
             
     def form_valid(self, form):
         #print(form.cleaned_data)
@@ -187,22 +190,25 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
         return form_class(countries_as_tuples, topics_as_tuples, indicators_as_tuples, **kwargs)
 
     def plot_country_comparison(self, countries: Iterable[str], topic: WorldBankTopic, indicator: WorldBankIndicators) -> p9.ggplot:
-        df = fetch_data(indicator, countries)
-        #print(df)
-        if df is None:
-            print(f"No usable data/plot for {indicator.name}")
-            raise Http404(f"No data for {countries} found in {indicator.wb_id}")
+        def make_plot():
+            df = fetch_data(indicator, countries)
+            #print(df)
+            if df is None:
+                print(f"No usable data/plot for {indicator.name}")
+                raise Http404(f"No data for {countries} found in {indicator.wb_id}")
 
-        plot = ( p9.ggplot(df, p9.aes("date", "metric", group="country", colour="country"))
-                 + p9.geom_line(size=1.2) 
-                 + p9.theme_classic()
-                 + p9.labs(x="", y="Value", title=indicator.name)
-                 + p9.theme(figure_size=(12, 6))
-        )
-        if "-yearly-" in indicator.tag:
-            plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+            plot = ( p9.ggplot(df, p9.aes("date", "metric", group="country", colour="country"))
+                    + p9.geom_line(size=1.2) 
+                    + p9.theme_classic()
+                    + p9.labs(x="", y="Value", title=indicator.name)
+                    + p9.theme(figure_size=(12, 6))
+                    + p9.scale_y_continuous(labels=label_shorten)
+            )
+            if "-yearly-" in indicator.tag:
+                plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+            return plot
         countries_str = "-".join(countries)
-        return cache_plot(f"{indicator.wb_id}-{countries_str}-worldbank-plot", lambda: plot)
+        return cache_plot(f"{indicator.wb_id}-{countries_str}-scm-worldbank-plot", make_plot)
 
     def form_valid(self, form):
         selected_countries = form.cleaned_data.get('countries', None)
@@ -250,34 +256,36 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
         return form_class(countries_as_tuples, topics_as_tuples, indicators_as_tuples, **kwargs)
 
     def plot_multiple_metrics(self, country: str, topic: WorldBankTopic, indicators: Iterable[WorldBankIndicators]) -> p9.ggplot:
-        plot_df = None
-        has_yearly = False
-        n_datasets = 0
-        for i in indicators:
-            df = fetch_data(i, [country])
-            if df is None:
-                continue
-            n_datasets += 1
-            df['dataset'] = f"{i.name} ({i.tag})"
-            if "-yearly-" in i.tag:
-                has_yearly = True
-            if plot_df is None:
-                plot_df = df
-            else:
-                plot_df = plot_df.append(df)
+        def make_plot():
+            plot_df = None
+            has_yearly = False
+            n_datasets = 0
+            for i in indicators:
+                df = fetch_data(i, [country])
+                if df is None:
+                    continue
+                n_datasets += 1
+                df['dataset'] = f"{i.name} ({i.tag})"
+                if "-yearly-" in i.tag:
+                    has_yearly = True
+                if plot_df is None:
+                    plot_df = df
+                else:
+                    plot_df = plot_df.append(df)
 
-        #print(plot_df)
-        plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset"))
-                 + p9.geom_line(size=1.2) 
-                 + p9.theme_classic()
-                 + p9.facet_wrap('~dataset', ncol=1, scales="free_y")
-                 + p9.theme(figure_size=(12, n_datasets * 1.5))
-                 + p9.scale_y_continuous(labels=label_shorten)
-        )
-        if has_yearly: # any indicator yearly? if so, then we'll label them all with years only on the plot
-            plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+            #print(plot_df)
+            plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset"))
+                    + p9.geom_line(size=1.2) 
+                    + p9.theme_classic()
+                    + p9.facet_wrap('~dataset', ncol=1, scales="free_y")
+                    + p9.theme(figure_size=(12, n_datasets * 1.5))
+                    + p9.scale_y_continuous(labels=label_shorten)
+            )
+            if has_yearly: # any indicator yearly? if so, then we'll label them all with years only on the plot
+                plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+            return plot
         indicator_id_str = "-".join([i.wb_id for i in indicators])
-        return cache_plot(f"{country}-{indicator_id_str}-scmm-worldbank-plot", lambda: plot, dont_cache=True)
+        return cache_plot(f"{country}-{indicator_id_str}-scmm-worldbank-plot", make_plot)
 
     def form_valid(self, form):
         selected_country = form.cleaned_data.get('country', None)
