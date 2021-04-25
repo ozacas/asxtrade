@@ -82,7 +82,7 @@ python3 manage.py runserver # run on local dev. host
 
   # run periodically (eg. quarterly) and at setup to update list of securities/companies/fundamentals
   python3 src/asxtrade.py --want-companies
-  python3 src/asxtrade.py --want-securities
+  python3 src/asxtrade.py --want-isin
   python3 src/asxtrade.py --want-details
 
   # daily: fetch prices from ASX - configuration in config.json. Run after trading close each trading day
@@ -141,4 +141,4 @@ This program builds an inverted index of the WorldBank data, to speed searching 
  2. A single metric for several countries
  3. Many metrics for a single country
 
-Each analysis comes with its own visualisations and features. 
+Each analysis comes with its own visualisations and features. More to come...
