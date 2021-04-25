@@ -78,7 +78,7 @@ def get_tempfile():
     """
     tempfile_kwargs = {}
     if platform.system() == 'Windows':
-	    tempfile_kwargs.update({'delete':False})
+        tempfile_kwargs.update({'delete':False})
     return tempfile.NamedTemporaryFile(**tempfile_kwargs)
 
 def update_isin(db, config, ensure_indexes=True):
