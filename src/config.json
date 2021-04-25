@@ -1,6 +1,6 @@
 {
    "asx_companies": "https://www.asx.com.au/asx/research/ASXListedCompanies.csv",
-   "asx_isin": "https://www.asx.com.au/programs/ISIN.xls",
+   "asx_isin": "https://www2.asx.com.au/content/dam/asx/issuers/ISIN.xls",
    "asx_prices": "https://www.asx.com.au/asx/1/share/",
    "asx_company_details": "https://www.asx.com.au/asx/1/company/%s?fields=primary_share,latest_annual_reports,last_dividend,primary_share.indices",
    "data_root": "data",

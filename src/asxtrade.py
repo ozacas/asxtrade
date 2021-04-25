@@ -93,7 +93,7 @@ def update_isin(db, config, ensure_indexes=True):
     with get_tempfile() as content:
         content.write(resp.content)
         content.seek(0)
-        df = pd.read_csv(content.name, sep="\t")
+        df = pd.read_excel(content.name)
         print(df.describe())
 
     fname = "{}/asx_isin/isin.{}.csv".format(
