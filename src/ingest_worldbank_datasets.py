@@ -261,6 +261,7 @@ if __name__ == "__main__":
         pass
     wb.fetcher.CACHE.sync = inner
     db.world_bank_indicators.create_index([('name', 'text'), ('source_note', 'text')])
+    n_downloaded = 0
     print("Processing {} datasets...".format(len(indicators.keys())))
     # TODO FIXME: add transaction support using pymongo
     for wb_id, i in indicators.items():
@@ -293,6 +294,7 @@ if __name__ == "__main__":
                 'last_successful_data': now,
             })
             time.sleep(a.delay)
+            n_downloaded += 1
         except (RuntimeError, ValueError) as e:
             print(f"Error processing {i}: {e}")
             update_indicator(db, i, {
@@ -300,4 +302,5 @@ if __name__ == "__main__":
                 'last_error_msg': str(e),
                 'last_error_type': str(type(e))
             })
+    print(f"Updated {n_downloaded} datasets. Run completed.")
     exit(0)
