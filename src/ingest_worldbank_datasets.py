@@ -205,7 +205,7 @@ def all_topics(db):
 
     return topics
 
-def all_indicators(db):
+def all_indicators(db, update_local_db=False):
     metrics = {}
     now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     for row in wb.get_indicator():
@@ -224,7 +224,8 @@ def all_indicators(db):
             'source_organisation': row['sourceOrganization'],
             'topics': row['topics']
         }
-        db.world_bank_indicators.update_one({ 'wb_id': d['wb_id'] }, { "$set": d}, upsert=True)
+        if update_local_db:
+            db.world_bank_indicators.update_one({ 'wb_id': d['wb_id'] }, { "$set": d}, upsert=True)
         metrics[d['wb_id']] = d
 
     print("Found {} datasets from wbdata".format(len(metrics.keys())))
@@ -234,7 +235,8 @@ if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Load workbank API datasets and create matching inverted index for viewer app to use")
     args.add_argument('--config', help="Configuration file to use [config.json]", type=str, default="config.json")
     args.add_argument('--delay', help="Delay between datasets (seconds) [30]", type=int, default=30)
-    args.add_argument('--purge', help="Remove existing data downloads and all indexes [no]", action='store_true')
+    args.add_argument('--clean', help="Remove existing data downloads and all indexes [no]", action='store_true')
+    args.add_argument('--rm-obsolete', help="Remove indicators from database which are not known anymore", action='store_true')
     args.add_argument('--freq', help="One of: Y==yearly, M==monthly, Q=quarterly. Not all datasets support all options", default='Y')
     args.add_argument('--all', help="Dont skip datasets processed in last month", action='store_true')
     a = args.parse_args()
@@ -245,14 +247,22 @@ if __name__ == "__main__":
 
     countries = all_countries(db)
     topics = all_topics(db)
-    indicators = all_indicators(db) if a.all else { i['wb_id']: i for i in db.world_bank_indicators.find({}) }
+    known_indicators = { i['wb_id']: i for i in db.world_bank_indicators.find({}) }
+    current_indicators = all_indicators(db, update_local_db=a.all)
+    indicators = current_indicators if a.all else known_indicators
+    if a.rm_obsolete:
+        obsolete_tags = set(known_indicators.keys()).difference(set(current_indicators.keys()))
+        print("{} datasets are no longer served by worldbank website, removing due to --rm-obsolete".format(len(obsolete_tags)))
+        if len(obsolete_tags) > 0:
+            db.world_bank_indicators.remove({ 'wb_id': {'$in': obsolete_tags}})
+
     print("Found {} countries, {} topics and {} indicators in existing database.".format(len(countries), len(topics), len(indicators)))
 
     month_ago = datetime.utcnow() - timedelta(days=30)
     recent_tags = set([i['tag'] for i in db.world_bank_inverted_index.find({}) if i['last_updated'] > month_ago])
     if not a.all:
         print("Ignoring {} datasets which have been downloaded and indexed in past month".format(len(recent_tags)))
-    if a.purge:
+    if a.clean:
         purge_all_worldbank_data(db)
         print("All existing worldbank data removed from DB")
     
