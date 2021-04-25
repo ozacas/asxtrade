@@ -1,18 +1,18 @@
 #!/usr/bin/python3.8
-import pymongo
 import argparse
-import requests
 import dateutil
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
-from datetime import datetime, timedelta, timezone, date
-from utils import *
 import json
-import csv
-import olefile
+import platform
 import tempfile
 import time
+import requests
 from random import randint
+from datetime import datetime, timedelta, timezone
+import pymongo
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+from utils import *
+
 import pandas as pd
 import os
 import re
@@ -72,6 +72,14 @@ def update_companies(db, config, ensure_indexes=True):
         )
     )
 
+def get_tempfile():
+    """
+    As suggested in PR#7, some systems dont permit use of a named file when delete == True
+    """
+    tempfile_kwargs = {}
+    if platform.system() == 'Windows':
+	    tempfile_kwargs.update({'delete':False})
+    return tempfile.NamedTemporaryFile(**tempfile_kwargs)
 
 def update_isin(db, config, ensure_indexes=True):
     resp = requests.get(config.get("asx_isin"))
@@ -82,7 +90,7 @@ def update_isin(db, config, ensure_indexes=True):
         )
 
     df = None
-    with tempfile.NamedTemporaryFile() as content:
+    with get_tempfile() as content:
         content.write(resp.content)
         content.seek(0)
         df = pd.read_csv(content.name, sep="\t")
