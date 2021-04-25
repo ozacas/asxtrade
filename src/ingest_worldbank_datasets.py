@@ -110,15 +110,26 @@ def fix_dataframe(i: dict, df: pd.DataFrame, countries, tag: str) -> tuple:
         print("WARNING: no country in dataframe: {}".format(attributes))
     return df, attribute_metadata
 
-def save_inverted_index(db, metadata: dict, dataframe: pd.DataFrame, indicator: dict, tag: str, countries: dict) -> None:
+def get_topics(indicator: dict):
+    topics_for_indicator = indicator.get('topics', None)
+    if topics_for_indicator is None:
+        return []
+
+    if not isinstance(topics_for_indicator, list):
+        topics_for_indicator = json.loads(topics_for_indicator)
+    return topics_for_indicator
+
+def has_topics(indicator: dict):
+    l = get_topics(indicator)
+    return len(l) > 0
+
+def save_inverted_index(db, metadata: dict, dataframe: pd.DataFrame, indicator: dict, tag: str, countries: dict) -> int:
     df_countries = set(dataframe['country'].unique())
     n_topics = n_countries = 0
     now = datetime.utcnow().replace(tzinfo=pytz.UTC)
-
-    topics_for_indicator = indicator['topics']
-    if not isinstance(topics_for_indicator, list):
-        topics_for_indicator = json.loads(topics_for_indicator)
-    for t in topics_for_indicator:
+    n_updated = 0
+   
+    for t in get_topics(indicator):
         n_topics += 1
         for df_c in df_countries:
             n_countries += 1
@@ -150,11 +161,13 @@ def save_inverted_index(db, metadata: dict, dataframe: pd.DataFrame, indicator: 
             d['indicator_name'] = i['name']
             db.world_bank_inverted_index.update_one({ 'scope': 'worldbank', 'tag': tag, 'country': country_code, 'topic_id': topic_id }, 
                                                     { "$set": d }, upsert=True)
+            n_updated += 1
 
     if n_topics == 0:
         raise ValueError(f"No topics for {tag} -- ignoring from dataset index")
     if n_countries == 0:
         raise ValueError(f"No countries for {tag} -- ignoring from dataset index")
+    return n_updated
     
 
 def purge_all_worldbank_data(db):
@@ -251,11 +264,15 @@ if __name__ == "__main__":
     print("Processing {} datasets...".format(len(indicators.keys())))
     # TODO FIXME: add transaction support using pymongo
     for wb_id, i in indicators.items():
+        if not has_topics(i):
+            print(f"WARNING: skipping dataset {wb_id} as it has no topics")
+            continue
+
         now = datetime.utcnow().replace(tzinfo=pytz.UTC)
         tag = as_tag(i, a.freq)
 
         if tag in recent_tags and not a.all:
-            #print(f"Skipping recently updated dataset: {wb_id}")
+            print(f"Skipping recently updated dataset: {wb_id}")
             continue
         try:
             print("Fetching... {} {}".format(wb_id, i['name']))
@@ -270,12 +287,14 @@ if __name__ == "__main__":
 
             save_dataframe(db, i, df, tag)
             
-            save_inverted_index(db, metadata, df, i, tag, countries)
+            n = save_inverted_index(db, metadata, df, i, tag, countries)
+            print(f"Updated {n} records for {tag}")
             update_indicator(db, i, {
                 'last_successful_data': now,
             })
             time.sleep(a.delay)
         except (RuntimeError, ValueError) as e:
+            print(f"Error processing {i}: {e}")
             update_indicator(db, i, {
                 'last_error_when': now,
                 'last_error_msg': str(e),
