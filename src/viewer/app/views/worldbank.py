@@ -37,7 +37,7 @@ def indicator_autocomplete_hits(country_codes: Iterable[str], topic_id: int, as_
     topic_id = int(topic_id)
 
     if len(country_codes) == 1: # optimisation to avoid using __in and the performance hit
-        records = WorldBankInvertedIndex.objects.filter(topic_id=topic_id, country=country_codes[0])
+        records = WorldBankInvertedIndex.objects.filter(topic_id=topic_id, country=next(iter(country_codes))) # cannot index a set, so we use this instead
     else:
         country_set = set(country_codes) # ensure no dupes
         n_countries = len(country_set)
@@ -49,11 +49,18 @@ def indicator_autocomplete_hits(country_codes: Iterable[str], topic_id: int, as_
         for r in records:
             countries_by_indicator[r.indicator_id].add(r.country)
         print("Countries for each metric: {}".format(countries_by_indicator))
-        acceptable_indicators = list(filter(lambda t: len(countries_by_indicator[t]) == n_countries, countries_by_indicator.keys()))
+        acceptable_indicators = set(filter(lambda t: len(countries_by_indicator[t]) == n_countries, countries_by_indicator.keys()))
         #print("Acceptable indicators: {}".format(acceptable_indicators))
         records = records.filter(indicator_id__in=acceptable_indicators)
 
-    hits = [i for i in sorted(records, key=lambda i: i.indicator_name)]
+    hits = []
+    seen = set()
+    for i in sorted(records, key=lambda i: i.indicator_name):
+        key = i.indicator_id
+        if key in seen:
+            continue
+        seen.add(key)
+        hits.append(i)
     print("Found {} matching indicators".format(len(hits)))
     current_id = None
     if len(hits) > 0:
@@ -87,7 +94,7 @@ def ajax_autocomplete_scsm_view(request):
 def ajax_autocomplete_scm_view(request):
     assert request.method == 'GET'
     topic_id = request.GET.get('topic_id', None)
-    country_codes = list(filter(lambda v: len(v) > 0, request.GET.get('country', '').split(",")))
+    country_codes = set(filter(lambda v: len(v) > 0, request.GET.get('country', '').split(",")))
     
     if len(country_codes) > 0:
         hits, current_id = indicator_autocomplete_hits(country_codes, topic_id)
