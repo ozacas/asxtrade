@@ -133,12 +133,12 @@ def save_inverted_index(db, metadata: dict, dataframe: pd.DataFrame, indicator: 
         n_topics += 1
         for df_c in df_countries:
             n_countries += 1
-            d = dict(**metadata)
-            topic_id = int(t['id'])
             try:
+                d = dict(**metadata)
+                topic_id = int(t['id'])
                 c = countries[df_c]
             except KeyError:
-                print(f"Not indexing unknown country/region: {df_c}")
+                print(f"Not indexing unknown country/region or topic: {df_c} {t}")
                 continue
             country_code = c.get('country_code', None)
             d['country'] = country_code
@@ -260,7 +260,8 @@ if __name__ == "__main__":
     def inner():
         pass
     wb.fetcher.CACHE.sync = inner
-    db.world_bank_indicators.create_index([('name', 'text'), ('source_note', 'text')])
+    # ensure full text search is possible at a future date
+    db.world_bank_indicators.create_index([('name', 'text'), ('source_note', 'text')]) 
     n_downloaded = 0
     print("Processing {} datasets...".format(len(indicators.keys())))
     # TODO FIXME: add transaction support using pymongo
@@ -292,6 +293,7 @@ if __name__ == "__main__":
             print(f"Updated {n} records for {tag}")
             update_indicator(db, i, {
                 'last_successful_data': now,
+                'last_updated': now,
             })
             time.sleep(a.delay)
             n_downloaded += 1
