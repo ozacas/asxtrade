@@ -105,7 +105,7 @@ This new data may not appear in the application until the cache entries expire (
  | Market sentiment | ![Pic](https://user-images.githubusercontent.com/11968760/91778464-e48ba400-ec35-11ea-9b47-413601da6fd8.png#thumbnail)|
  | Performance by sector | ![Pic](https://user-images.githubusercontent.com/11968760/110228446-6a760800-7f55-11eb-9041-786e6d145817.png#thumbnail)|
  | Portfolio optimisation | ![Pic](https://user-images.githubusercontent.com/11968760/110228663-e7ee4800-7f56-11eb-8b7d-edd3a09d7b29.png#thumbnail)
- | World Bank API data: macro-economic outlook for many countries | |
+ | World Bank API data: more than 10000 free datasets in over twenty subject areas | ![Pic](https://user-images.githubusercontent.com/11968760/115988232-00481e00-a5fc-11eb-9ab7-afa3a5365cb2.png)|
 
 
 ## Testing
