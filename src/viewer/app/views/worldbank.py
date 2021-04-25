@@ -203,6 +203,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
                     + p9.labs(x="", y="Value", title=indicator.name)
                     + p9.theme(figure_size=(12, 6))
                     + p9.scale_y_continuous(labels=label_shorten)
+                    + p9.scale_color_cmap_d()
             )
             if "-yearly-" in indicator.tag:
                 plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
@@ -265,7 +266,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
                 if df is None:
                     continue
                 n_datasets += 1
-                df['dataset'] = f"{i.name} ({i.tag})"
+                df['dataset'] = f"{i.name} ({i.wb_id})"
                 if "-yearly-" in i.tag:
                     has_yearly = True
                 if plot_df is None:
@@ -274,8 +275,9 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
                     plot_df = plot_df.append(df)
 
             #print(plot_df)
-            plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset"))
+            plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset", colour="dataset"))
                     + p9.geom_line(size=1.2) 
+                    + p9.scale_color_cmap_d()
                     + p9.theme_classic()
                     + p9.facet_wrap('~dataset', ncol=1, scales="free_y")
                     + p9.theme(figure_size=(12, n_datasets * 1.5))
