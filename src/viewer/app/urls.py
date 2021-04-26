@@ -73,9 +73,9 @@ urlpatterns = [
     path("worldbank/scmm", WorldBankSCMMView.as_view(), name="worldbank-scmm-view"),
     path("worldbank/", worldbank_index_view, name="worldbank-data-view"),
 
-    path('ajax/autocomplete/scsm', ajax_autocomplete_scsm_view, name="ajax-worldbank-scsm-autocomplete"),
+    path('ajax/autocomplete/scsm', ajax_autocomplete_view, name="ajax-worldbank-scsm-autocomplete"),
     path('ajax/autocomplete/scm', ajax_autocomplete_scm_view, name='ajax-worldbank-scm-autocomplete'),
-    path('ajax/autocomplete/scmm', ajax_autocomplete_scmm_view, name='ajax-worldbank-scmm-autocomplete')
+    path('ajax/autocomplete/scmm', ajax_autocomplete_view, name='ajax-worldbank-scmm-autocomplete')
 ]
 
 

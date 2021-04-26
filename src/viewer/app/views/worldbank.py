@@ -37,7 +37,7 @@ def indicator_autocomplete_hits(country_codes: Iterable[str], topic_id: int, as_
     topic_id = int(topic_id)
 
     if len(country_codes) == 1: # optimisation to avoid using __in and the performance hit
-        records = WorldBankInvertedIndex.objects.filter(topic_id=topic_id, country=next(iter(country_codes))) # cannot index a set, so we use this instead
+        records = WorldBankInvertedIndex.objects.filter(topic_id=topic_id, country=next(iter(country_codes))) # cannot index a set, so we use next() instead
     else:
         country_set = set(country_codes) # ensure no dupes
         n_countries = len(country_set)
@@ -70,7 +70,12 @@ def indicator_autocomplete_hits(country_codes: Iterable[str], topic_id: int, as_
     return hits, current_id
 
 
-def fetch_data(indicator: WorldBankIndicators, country_names: Iterable[str]) -> pd.DataFrame:
+def fetch_data(indicator: WorldBankIndicators, country_names: Iterable[str], fill_missing=None) -> pd.DataFrame:
+    """
+    Fetch data from the market_data_cache collection (not to be confused with the market_quote_cache collection)
+    and ensure the specified countries are only present in the data (if present). Optionally apply a callable to
+    fill in gaps eg. resample
+    """
     if indicator is None:
         return None
     with io.BytesIO(indicator.fetch_data()) as fp:
@@ -80,11 +85,16 @@ def fetch_data(indicator: WorldBankIndicators, country_names: Iterable[str]) -> 
             #print(country_names)
             if len(plot_df) == 0:
                 return None
+            if fill_missing:
+                print(plot_df)
+                plot_df.index = pd.to_datetime(plot_df['date'], format='%Y-%m-%d') # avoid callers having to specify 'on' keyword as they may not know which column
+                plot_df = fill_missing(plot_df)
+                print(plot_df)
             return plot_df
         else:
             return None
 
-def ajax_autocomplete_scsm_view(request):
+def ajax_autocomplete_view(request):
     assert request.method == 'GET'
     topic_id = request.GET.get('topic_id', None)
     country_code = request.GET.get('country', None)
@@ -102,13 +112,6 @@ def ajax_autocomplete_scm_view(request):
         hits = []
         current_id = None
     return render(request, "autocomplete_indicators.html", context={ 'hits': hits, "current_id": current_id })
-
-def ajax_autocomplete_scmm_view(request):
-    assert request.method == 'GET'
-    topic_id = request.GET.get('topic_id', None)
-    country_code = request.GET.get('country', None)
-    hits, current_id = indicator_autocomplete_hits([country_code], topic_id)
-    return render(request, "autocomplete_indicators.html", context={'hits': hits, 'current_id': current_id})
 
 class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single metric (indicator) the easiest to start with
     action_url = '/worldbank/scsm'
@@ -132,13 +135,13 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single 
 
     def plot_indicator(self, country: WorldBankCountry, topic: WorldBankTopic, indicator: WorldBankIndicators) -> str:
         def make_plot():
-            df = fetch_data(indicator, [country.name])
+            df = fetch_data(indicator, [country.name], fill_missing=lambda df: df.resample('AS').asfreq())
             if df is None:
                 print(f"No usable data/plot for {indicator.name}")
                 raise Http404(f"No data for {country.name} found in {indicator.wb_id}")
 
             plot = ( p9.ggplot(df, p9.aes("date", "metric"))
-                    + p9.geom_line(size=1.2) 
+                    + p9.geom_path(size=1.2) 
                     + p9.theme_classic()
                     + p9.labs(x="", y="Value", title=indicator.name)
                     + p9.theme(figure_size=(12, 6))
@@ -198,14 +201,14 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
 
     def plot_country_comparison(self, countries: Iterable[str], topic: WorldBankTopic, indicator: WorldBankIndicators) -> p9.ggplot:
         def make_plot():
-            df = fetch_data(indicator, countries)
+            df = fetch_data(indicator, countries, fill_missing=lambda df: df.resample('AS').asfreq()) # ensure df has gaps filled in with NAN
             #print(df)
             if df is None:
                 print(f"No usable data/plot for {indicator.name}")
                 raise Http404(f"No data for {countries} found in {indicator.wb_id}")
 
             plot = ( p9.ggplot(df, p9.aes("date", "metric", group="country", colour="country"))
-                    + p9.geom_line(size=1.2) 
+                    + p9.geom_path(size=1.2) 
                     + p9.theme_classic()
                     + p9.labs(x="", y="Value", title=indicator.name)
                     + p9.theme(figure_size=(12, 6))
@@ -269,7 +272,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
             has_yearly = False
             n_datasets = 0
             for i in indicators:
-                df = fetch_data(i, [country])
+                df = fetch_data(i, [country], lambda df: df.resample('AS').asfreq())
                 if df is None:
                     continue
                 n_datasets += 1
@@ -283,7 +286,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
 
             #print(plot_df)
             plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset", colour="dataset"))
-                    + p9.geom_line(size=1.2) 
+                    + p9.geom_path(size=1.2) 
                     + p9.scale_color_cmap_d()
                     + p9.theme_classic()
                     + p9.facet_wrap('~dataset', ncol=1, scales="free_y")
