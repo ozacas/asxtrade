@@ -13,6 +13,7 @@ import time
 import json
 import pandas as pd
 import pymongo
+import re
 import wbdata as wb
 from typing import Iterable
 from bson.binary import Binary
@@ -88,6 +89,15 @@ def fix_dataframe(i: dict, df: pd.DataFrame, countries, tag: str) -> tuple:
     attribute_metadata = { 'n_attributes': len(attributes) }
     for key in ['date', 'country']:
         attribute_metadata['has_'+key] = key in attributes
+    # remove rows with bad dates which we cant plot right now... TODO FIME:
+    bad_dates = []
+    for unique_date in df['date'].unique():
+        if not re.match(r'^\d{4}$', unique_date):
+            bad_dates.append(unique_date)
+    if len(bad_dates) > 0:
+        print("WARNING: removing bad date entries from dataframe: {}".format(bad_dates))
+        df = df[~df['date'].isin(bad_dates)]
+    #print(df['date'].unique())
     if 'date' in attributes:
         mean_date_len = df['date'].apply(lambda v: len(str(v))).mean()
         n_dates = df['date'].nunique()
@@ -255,6 +265,8 @@ if __name__ == "__main__":
     args.add_argument('--rm-obsolete', help="Remove indicators from database which are not known anymore", action='store_true')
     args.add_argument('--freq', help="One of: Y==yearly, M==monthly, Q=quarterly. Not all datasets support all options", default='Y')
     args.add_argument('--all', help="Dont skip datasets processed in last month", action='store_true')
+    args.add_argument('--prefix', help="Limit ingestion to indicators prefixed with XXX", type=str, default=None)
+    args.add_argument('--fail-fast', help="Stop on first error", action='store_true')
     a = args.parse_args()
     config, password = read_config(a.config)
     m = config.get('mongo')
@@ -287,7 +299,11 @@ if __name__ == "__main__":
     n_downloaded = 0
     print("Processing {} datasets...".format(len(indicators.keys())))
     # TODO FIXME: add transaction support using pymongo
-    for wb_id, i in indicators.items():
+    if a.prefix is not None:
+        filter_func = lambda t: t[0].startswith(a.prefix)
+    else:
+        filter_func = lambda t: True  # no filtering
+    for wb_id, i in filter(filter_func, indicators.items()):
         if not has_topics(i):
             print(f"WARNING: skipping dataset {wb_id} as it has no topics")
             continue
@@ -326,5 +342,7 @@ if __name__ == "__main__":
                 'last_error_msg': str(e),
                 'last_error_type': str(type(e))
             })
+            if args.fail_fast:
+                raise e
     print(f"Updated {n_downloaded} datasets. Run completed.")
     exit(0)
