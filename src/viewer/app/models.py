@@ -808,12 +808,18 @@ def impute_missing(df, method="linear"):
 
 @func.lru_cache(maxsize=1)
 def all_etfs():
-    etf_codes = [
-        s.asx_code
-        for s in Security.objects.filter(
-            security_name="EXCHANGE TRADED FUND UNITS FULLY PAID"
-        )
-    ]
+    etf_codes = set()
+    for security in Security.objects.all():
+        sname = security.security_name.lower()
+        if "exchange traded fund units" in sname:
+            etf_codes.add(security.asx_code)
+        elif 'etf units' in sname:
+            etf_codes.add(security.asx_code)
+        elif sname.startswith('etfs '):
+            etf_codes.add(security.asx_code)
+        elif sname.endswith(' etf'):
+            etf_codes.add(security.asx_code)
+
     print("Found {} ETF codes".format(len(etf_codes)))
     return etf_codes
 

@@ -233,7 +233,13 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
 def available_stocks(db, config):
     assert config is not None
     # only variants which include ORDINARY FULLY PAID/STAPLED SECURITIES eg. SYD
-    stocks = [re.compile(".*ORDINARY.*"), re.compile("^EXCHANGE\s+TRADED\s+FUND.*$")]
+    stocks = [re.compile(r".*ORDINARY.*"), 
+              re.compile(r"^EXCHANGE\s+TRADED\s+FUND.*$"), 
+              re.compile(r"\bETF\b"),
+              re.compile(r"^ETFS\b"),
+              re.compile(r"\bETF\s+UNITS\b"),
+              re.compile(r"\sETF$")
+             ]
     ret = set()
     for security_type in stocks:
         tmp = set(
