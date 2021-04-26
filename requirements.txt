@@ -10,7 +10,7 @@ matplotlib
 numpy
 pandas >= 1.1.0
 wbdata
-plotnine
+plotnine >= 0.8.0
 pytest-django
 pytest-mock
 pytest-factoryboy
