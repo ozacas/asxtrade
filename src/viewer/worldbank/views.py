@@ -30,6 +30,11 @@ def label_shorten(labels: Iterable[float]) -> Iterable[str]:
     for v in labels:
         magnitude_v = abs(v)
         new_str = str(int(v)) if magnitude_v > 100000.0 else "{:f}".format(v)
+        # trim trailing zeros so it doesnt confuse the code below?
+        if re.match(r'^.*\.0+$', new_str):
+            new_str = re.sub(r'\.0+$', '', new_str)
+            # fallthru...
+
         str_labels.append(new_str)  # NB: some plots have negative value tick marks, so we must handle it
         if magnitude_v > 1e-10:
             non_zero_labels.append(new_str)
@@ -241,7 +246,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
     def plot_country_comparison(self, countries: Iterable[str], topic: WorldBankTopic, indicator: WorldBankIndicators) -> p9.ggplot:
         def fix_gaps(df: pd.DataFrame) -> pd.DataFrame:
             df = df.resample('AS').asfreq()
-            df['country'] = next(iter(countries))
+            df['country'] = next(iter(countries))  # NB: this is only correct wen len(countries) == 1
             return df
 
         def make_plot():
@@ -249,7 +254,9 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
             if len(countries) == 1:
                 resample_lambda = fix_gaps
             df = fetch_data(indicator, countries, fill_missing=resample_lambda) # not resampling to fill gaps at this time, unless only one country is being plotted: TODO BUG FIXME
-            print(df)
+            pct_na = (df['metric'].isnull().sum() / len(df)) * 100.0
+            assert pct_na >= 0.0 and pct_na <= 100.0
+            
             if df is None:
                 print(f"No usable data/plot for {indicator.name}")
                 raise Http404(f"No data for {countries} found in {indicator.wb_id}")
@@ -264,9 +271,13 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
             )
             if "-yearly-" in indicator.tag:
                 plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+            # if pct_na is too high, geom_path() may be unable to draw a line (each value is surrounded by nan preventing a path)
+            # so we use geom_point() to highlight the sparse nature of the data
+            if pct_na > 40.0:
+                plot += p9.geom_point(size=3.0)
             return plot
         countries_str = "-".join(countries)
-        return cache_plot(f"{indicator.wb_id}-{countries_str}-scm-worldbank-plot", make_plot)
+        return cache_plot(f"{indicator.wb_id}-{countries_str}-scm-worldbank-plot", make_plot, dont_cache=True)
 
     def form_valid(self, form):
         selected_countries = form.cleaned_data.get('countries', None)
