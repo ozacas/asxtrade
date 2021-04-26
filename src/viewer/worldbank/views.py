@@ -114,6 +114,35 @@ def indicator_autocomplete_hits(country_codes: Iterable[str], topic_id: int, as_
     return hits, current_id
 
 
+def worldbank_plot(df: pd.DataFrame, title: str, dates_are_yearly: bool, figure_size=(12,6), add_points=False, **plot_kwargs) -> p9.ggplot:
+    """
+    Carefully written to support all worldbank plots, this method is the one place where the app needs themes, colour maps
+    and various plot related settings. For sparse datasets it used geom_point() in addition to geom_line() in case the data
+    is so sparse that lines cannot be drawn. Returns a ggplot instance or raises an exception if the dataframe is empty.
+    """
+    if df is None:
+        print(f"No usable data/plot for {title}")
+        raise Http404(f"No data for {title}")
+
+    pct_na = (df['metric'].isnull().sum() / len(df)) * 100.0
+    assert pct_na >= 0.0 and pct_na <= 100.0
+    
+    plot = ( p9.ggplot(df, p9.aes("date", "metric", **plot_kwargs))
+            + p9.geom_path(size=1.2) 
+            + p9.theme_classic()
+            + p9.labs(x="", y="Value", title=title)
+            + p9.theme(figure_size=figure_size)
+            + p9.scale_y_continuous(labels=label_shorten)
+            + p9.scale_color_cmap_d()
+    )
+    if dates_are_yearly:
+        plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+    # if pct_na is too high, geom_path() may be unable to draw a line (each value is surrounded by nan preventing a path)
+    # so we use geom_point() to highlight the sparse nature of the data
+    if pct_na > 40.0 or add_points:
+        plot += p9.geom_point(size=3.0)
+    return plot
+
 def fetch_data(indicator: WorldBankIndicators, country_names: Iterable[str], fill_missing=None) -> pd.DataFrame:
     """
     Fetch data from the market_data_cache collection (not to be confused with the market_quote_cache collection)
@@ -179,21 +208,10 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single 
 
     def plot_indicator(self, country: WorldBankCountry, topic: WorldBankTopic, indicator: WorldBankIndicators) -> str:
         def make_plot():
-            df = fetch_data(indicator, [country.name], fill_missing=lambda df: df.resample('AS').asfreq())
-            if df is None:
-                print(f"No usable data/plot for {indicator.name}")
-                raise Http404(f"No data for {country.name} found in {indicator.wb_id}")
+            df = fetch_data(indicator, [country.name], 
+                            fill_missing=lambda df: df.resample('AS').asfreq())
+            return worldbank_plot(df, indicator.name, True)
 
-            plot = ( p9.ggplot(df, p9.aes("date", "metric"))
-                    + p9.geom_path(size=1.2) 
-                    + p9.theme_classic()
-                    + p9.labs(x="", y="Value", title=indicator.name)
-                    + p9.theme(figure_size=(12, 6))
-                    + p9.scale_y_continuous(labels=label_shorten)
-            )
-            if "-yearly-" in indicator.tag:
-                plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
-            return plot
         return cache_plot(f"{indicator.wb_id}-{country.name}-scsm-worldbank-plot", make_plot)
             
     def form_valid(self, form):
@@ -245,6 +263,11 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
 
     def plot_country_comparison(self, countries: Iterable[str], topic: WorldBankTopic, indicator: WorldBankIndicators) -> p9.ggplot:
         def fix_gaps(df: pd.DataFrame) -> pd.DataFrame:
+            """
+            If say the plot timeframe is between 1960 and 2020 but there are missing rows where some years used to be,
+            this method will re-introduce new rows into the dataframe and set the country column to the specified country. It must
+            only be called when len(countries) == 1 or a pandas error will occur
+            """
             df = df.resample('AS').asfreq()
             df['country'] = next(iter(countries))  # NB: this is only correct wen len(countries) == 1
             return df
@@ -254,28 +277,9 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
             if len(countries) == 1:
                 resample_lambda = fix_gaps
             df = fetch_data(indicator, countries, fill_missing=resample_lambda) # not resampling to fill gaps at this time, unless only one country is being plotted: TODO BUG FIXME
-            pct_na = (df['metric'].isnull().sum() / len(df)) * 100.0
-            assert pct_na >= 0.0 and pct_na <= 100.0
-            
-            if df is None:
-                print(f"No usable data/plot for {indicator.name}")
-                raise Http404(f"No data for {countries} found in {indicator.wb_id}")
+            kwargs = { 'group': "country", 'colour': "country"}
+            return worldbank_plot(df, indicator.name, True, **kwargs)
 
-            plot = ( p9.ggplot(df, p9.aes("date", "metric", group="country", colour="country"))
-                    + p9.geom_path(size=1.2) 
-                    + p9.theme_classic()
-                    + p9.labs(x="", y="Value", title=indicator.name)
-                    + p9.theme(figure_size=(12, 6))
-                    + p9.scale_y_continuous(labels=label_shorten)
-                    + p9.scale_color_cmap_d()
-            )
-            if "-yearly-" in indicator.tag:
-                plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
-            # if pct_na is too high, geom_path() may be unable to draw a line (each value is surrounded by nan preventing a path)
-            # so we use geom_point() to highlight the sparse nature of the data
-            if pct_na > 40.0:
-                plot += p9.geom_point(size=3.0)
-            return plot
         countries_str = "-".join(countries)
         return cache_plot(f"{indicator.wb_id}-{countries_str}-scm-worldbank-plot", make_plot, dont_cache=True)
 
@@ -329,33 +333,34 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
             plot_df = None
             has_yearly = False
             n_datasets = 0
+            add_points = False
             for i in indicators:
-                df = fetch_data(i, [country], lambda df: df.resample('AS').asfreq())
-                if df is None:
+                df = fetch_data(i, [country], fill_missing=lambda df: df.resample('AS').asfreq())
+                if df is None or len(df) == 0:
                     continue
                 n_datasets += 1
                 df['dataset'] = f"{i.name} ({i.wb_id})"
                 if "-yearly-" in i.tag:
                     has_yearly = True
+                pct_na = (df['metric'].isnull().sum() / len(df)) * 100.0
+                
+                if pct_na > 40.0 or len(df) <= 3:
+                    add_points = True
                 if plot_df is None:
                     plot_df = df
                 else:
+                    # if any indicator is sparse, we enable points for all indicators to be able to see them all
                     plot_df = plot_df.append(df)
 
             #print(plot_df)
-            plot = ( p9.ggplot(plot_df, p9.aes("date", "metric", group="dataset", colour="dataset"))
-                    + p9.geom_path(size=1.2) 
-                    + p9.scale_color_cmap_d()
-                    + p9.theme_classic()
-                    + p9.facet_wrap('~dataset', ncol=1, scales="free_y")
-                    + p9.theme(figure_size=(12, n_datasets * 1.5))
-                 #   + p9.scale_y_continuous(labels=label_shorten)
-            )
-            if has_yearly: # any indicator yearly? if so, then we'll label them all with years only on the plot
-                plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
+            figure_size = (12, n_datasets * 1.5)
+            kwargs = { 'group': "dataset", 'colour': "dataset" }
+            plot = worldbank_plot(plot_df, '', has_yearly, figure_size=figure_size, add_points=add_points, **kwargs)
+            plot += p9.facet_wrap('~dataset', ncol=1, scales="free_y")
             return plot
+
         indicator_id_str = "-".join([i.wb_id for i in indicators])
-        return cache_plot(f"{country}-{indicator_id_str}-scmm-worldbank-plot", make_plot)
+        return cache_plot(f"{country}-{indicator_id_str}-scmm-worldbank-plot", make_plot, dont_cache=True)
 
     def form_valid(self, form):
         selected_country = form.cleaned_data.get('country', None)
