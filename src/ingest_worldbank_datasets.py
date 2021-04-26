@@ -14,6 +14,7 @@ import json
 import pandas as pd
 import pymongo
 import wbdata as wb
+from typing import Iterable
 from bson.binary import Binary
 from datetime import datetime, timedelta
 from utils import read_config
