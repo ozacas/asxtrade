@@ -357,6 +357,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
             kwargs = { 'group': "dataset", 'colour': "dataset" }
             plot = worldbank_plot(plot_df, '', has_yearly, figure_size=figure_size, add_points=add_points, **kwargs)
             plot += p9.facet_wrap('~dataset', ncol=1, scales="free_y")
+            plot += p9.theme(legend_position='none') # disable legend since each facet has its own title
             return plot
 
         indicator_id_str = "-".join([i.wb_id for i in indicators])
