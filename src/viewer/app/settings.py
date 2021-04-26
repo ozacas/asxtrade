@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'menu',
     'app',
     'debug_toolbar',
+    'worldbank',
 ]
 
 MIDDLEWARE = [

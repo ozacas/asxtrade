@@ -6,11 +6,7 @@ from app.models import (
     VirtualPurchase,
     Watchlist,
     Sector,
-    MarketDataCache,
-    WorldBankTopic,
-    WorldBankInvertedIndex,
-    WorldBankIndicators,
-    WorldBankCountry,
+    MarketQuoteCache
 )
 from app.paginator import NoCountPaginator
 
@@ -57,25 +53,8 @@ class WatchlistAdmin(admin.ModelAdmin):
 class SectorAdmin(admin.ModelAdmin):
     list_display = ('id', 'sector_name', 'sector_id',)
 
-@admin.register(MarketDataCache)
-class MarketDataCacheAdmin(admin.ModelAdmin):
+@admin.register(MarketQuoteCache)
+class MarketQuoteCacheAdmin(admin.ModelAdmin):
     exclude = ('dataframe',)
     list_display = ('tag', 'n_days', 'n_stocks', '_id', 'sha256')
     list_filter = ('field', 'last_updated',)
-
-@admin.register(WorldBankCountry)
-class WorldBankCountriesAdmin(admin.ModelAdmin):
-    list_display = ('country_code', 'name', 'last_updated')
-
-@admin.register(WorldBankTopic)
-class WorldBankTopicsAdmin(admin.ModelAdmin):
-    list_display = ('id', 'topic', 'last_updated', 'source_note')
-
-@admin.register(WorldBankIndicators)
-class WorldBankIndicatorsAdmin(admin.ModelAdmin):
-    list_display = ('id', 'wb_id', 'last_updated', 'name', 'source_organisation')
-    exclude = ('topics',)
-
-@admin.register(WorldBankInvertedIndex)
-class WorldBankInvertedIndexAdmin(admin.ModelAdmin):
-    list_display = ('id', 'country', 'topic_id', 'topic_name', 'n_attributes', 'last_updated', 'tag', 'indicator_id', 'indicator_name')

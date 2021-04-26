@@ -16,12 +16,12 @@ from bson.binary import Binary
 import django.db.models as model
 from django.conf import settings
 from django.forms.models import model_to_dict
+from djongo.models.json import JSONField
 from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.dispatch import receiver
 from djongo.models import ObjectIdField, DjongoManager, ArrayField
-from djongo.models.json import JSONField
 from django.http import Http404
 from cachetools import cached, LRUCache, LFUCache, keys, func
 
@@ -619,7 +619,7 @@ def find_movers(
     # print(results)
     if max_price is not None:
         ymd = latest_quotation_date("ANZ")
-        qs, actual_ymd = valid_quotes_only(ymd, ensure_date_has_data=True)
+        qs, _ = valid_quotes_only(ymd, ensure_date_has_data=True)
         stocks_lte_max_price = [q.asx_code for q in qs if q.last_price <= max_price]
         results = results.filter(stocks_lte_max_price)
     print("Reporting {} movers after filtering".format(len(results)))
@@ -963,7 +963,7 @@ def company_prices(
     return superdf
 
 
-class MarketDataCache(model.Model):
+class MarketQuoteCache(model.Model):
     # { "_id" : ObjectId("5f44c54457d4bb6dfe6b998f"), "scope" : "all-downloaded",
     # "tag" : "change_price-05-2020-asx", "dataframe_format" : "parquet",
     # "field" : "change_price", "last_updated" : ISODate("2020-08-25T08:01:08.804Z"),
@@ -1048,142 +1048,14 @@ def user_purchases(user):
     return purchases
 
 
-# class Profile(model.Model):
-#     """User profile model for defaults for various analyses and visualisations"""
-#     user = model.OneToOneField(get_user_model(), on_delete=model.CASCADE)
-#     timeframe_in_days = model.IntegerField(validators=[MinValueValidator(10), MaxValueValidator(100000)], default=180) # for plots/analyses were default is permissable
-#     line_size = model.FloatField(validators=[MinValueValidator(0.5), MaxValueValidator(10.0)], default=1.5) # for line based plots
-
-#     objects = DjongoManager()
-
-#     class Meta:
-#         db_table = "user_profiles"
-
-# @receiver(post_save, sender=get_user_model())
-# def create_user_profile(sender, instance, created, **kwargs):
-#     if not created:
-#         Profile.objects.create(user=instance)
-
-# @receiver(post_save, sender=get_user_model())
-# def save_user_profile(sender, instance, **kwargs):
-#     instance.profile.save()
-
-
-class WorldBankCountry(model.Model):
-    """
-    Not strictly a country, can include regions eg. africa ex-warzones
-    """
-
-    id = ObjectIdField(primary_key=True, db_column="_id")
-    country_code = model.TextField()
-    name = model.TextField()
-    last_updated = model.DateTimeField(auto_now_add=True)
-
-    objects = DjongoManager()
-
-    class Meta:
-        db_table = "world_bank_countries"
-        verbose_name_plural = "World Bank Countries"
-
-
 @func.lru_cache(maxsize=100)
-def get_parquet(tag: str, model=MarketDataCache) -> pd.DataFrame:
+def get_parquet(tag: str) -> pd.DataFrame:
+    """
+    This function is reserved for the viewer app: other apps have a similar function which use
+    separate Mongo collections (models) to avoid performance hits
+    """
     assert len(tag) > 0
-    cache_entry = model.objects.filter(tag=tag).first()
+    cache_entry = MarketQuoteCache.objects.filter(tag=tag).first()
     if cache_entry is not None:
         return cache_entry.dataframe
     return None
-
-
-class WorldBankTopic(model.Model):
-    id = model.IntegerField(null=False, blank=False, primary_key=True)
-    topic = model.TextField(null=False, blank=False)
-    source_note = model.TextField(null=False, blank=False)
-    last_updated = model.DateTimeField(auto_now_add=True)
-
-    objects = DjongoManager()
-
-    def __init__(self, *args, **kwargs):  # support initialization via ArrayField
-        topic = kwargs.pop("value", None)
-        source_note = kwargs.pop("sourceNote", None)
-        extra_args = {}
-        if topic is not None:
-            extra_args["topic"] = topic
-        if source_note is not None:
-            extra_args["source_note"] = source_note
-        super(WorldBankTopic, self).__init__(*args, **kwargs, **extra_args)
-
-    class Meta:
-        db_table = "world_bank_topics"
-
-
-class WorldBankInvertedIndex(model.Model):
-    id = ObjectIdField(primary_key=True, db_column="_id")
-    country = model.TextField()
-    topic_id = model.IntegerField()
-    topic_name = model.TextField()
-    n_attributes = model.IntegerField()
-    last_updated = model.DateTimeField()
-    tag = model.TextField()
-    indicator_id = model.TextField() # xref into WorldBankIndicators.wb_id
-    indicator_name = model.TextField() # likewise to name field
-
-    objects = DjongoManager()
-
-    class Meta:
-        db_table = "world_bank_inverted_index"
-        verbose_name_plural = "World Bank Inverted Indexes"
-
-class WorldBankDataCache(model.Model): # a minimal model because i stuffed up the table name when ingesting worldbank data
-    tag = model.TextField(null=False)
-    dataframe = model.BinaryField()
-
-    class Meta:
-        db_table = "market_data_cache"
-
-class WorldBankIndicators(model.Model):
-    id = ObjectIdField(primary_key=True, db_column='_id')
-    wb_id = model.TextField()  # world bank id, not to be confused with django id/pk
-    name = model.TextField()
-    last_updated = model.DateTimeField(auto_now_add=True)
-    unit = model.TextField()
-    source = JSONField()
-    source_note = model.TextField()
-    topics = ArrayField(WorldBankTopic)
-    source_organisation = model.TextField()
-    last_successful_data = model.DateTimeField(null=True)
-    last_error_when = model.DateTimeField(null=True) # date of last ingest error for this indicator (or None if not known)
-    last_error_msg = model.TextField()  # eg. Error code 175
-    last_error_type = model.TextField() # eg. class RuntimeError
-
-    objects = DjongoManager()
-
-    def __init__(self, *args, **kwargs):
-        wb_id = kwargs.pop("id", None)
-        source_organisation = kwargs.pop("sourceOrganization", None)
-        source_note = kwargs.pop("sourceNote", None)
-        # wb_id=wb_id, source_organisation=source_organisation, source_note=source_note
-        super(WorldBankIndicators, self).__init__(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.wb_id} {self.name} {self.source} last_error_when={self.last_error_when} last_updated={self.last_updated}"
-
-    @property
-    def tag(self): # NB: must match the ingest_worldbank_datasets.py tag name...
-        return f"{self.wb_id}-yearly-dataframe"
-
-    @property
-    def has_data(self):
-        obj = MarketDataCache.objects.filter(tag=self.tag).first()
-        return obj is not None
-
-    def fetch_data(self) -> pd.DataFrame:
-        t = self.tag
-        print(f"Fetching parquet dataframe for {t}")
-        return get_parquet(t, model=WorldBankDataCache)
-   
-    class Meta:
-        db_table = "world_bank_indicators"
-        verbose_name = 'World Bank Metric'
-        verbose_name_plural = 'World Bank Metrics'
-

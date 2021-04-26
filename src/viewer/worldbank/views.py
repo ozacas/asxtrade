@@ -15,9 +15,43 @@ import plotnine as p9
 from mizani.formatters import date_format
 import pandas as pd
 from app.data import cache_plot
-from app.models import WorldBankIndicators, WorldBankCountry, WorldBankTopic, WorldBankInvertedIndex
-from app.forms import WorldBankSCSMForm, WorldBankSCMForm, WorldBankSCMMForm
-from app.plots import label_shorten
+from worldbank.models import WorldBankIndicators, WorldBankCountry, WorldBankTopic, WorldBankInvertedIndex
+from worldbank.forms import WorldBankSCSMForm, WorldBankSCMForm, WorldBankSCMMForm
+
+
+# BUGGY TODO FIXME: doesnt handle multiple-metric view well and choice of significant digits sucks also
+def label_shorten(labels: Iterable[float]) -> Iterable[str]:
+    """
+    For large numbers we report them removing all the zeros and replacing with billions/millions/trillions as appropriate.
+    This is only done if all labels in the plot end with zeros and all are sufficiently long to have enough zeros. Otherwise labels are untouched.
+    """
+    str_labels = []
+    for v in labels:
+        str_labels.append(str(int(v)) if abs(v) > 100000.0 else "{:f}".format(v))  # NB: some plots have negative value tick marks, so we must handle it
+    #print(str_labels)
+    is_non_zero_lambda = lambda v: v not in ("0", "0.0")
+    non_zero_labels = list(filter(is_non_zero_lambda, str_labels))
+    #print(non_zero_labels)
+
+    for units, short_label in [("000000000000", "T."), ("000000000", "B."), ("000000", "M.")]:
+        found_cnt = 0
+        for l in non_zero_labels:
+            if l.endswith(units):
+                found_cnt += 1
+        if found_cnt == len(non_zero_labels):
+            new_labels = []
+            for old_label in str_labels:
+                #print(old_label)
+                #print(units)
+                if is_non_zero_lambda(old_label):
+                    base_label = old_label[0:-len(units)]
+                    new_label = base_label + short_label
+                    new_labels.append(new_label)
+                else:
+                    new_labels.append(old_label)
+            return new_labels
+    # no way to consistently shorten labels? ok, return supplied labels
+    return labels
 
 @login_required
 def worldbank_index_view(request):
@@ -86,10 +120,10 @@ def fetch_data(indicator: WorldBankIndicators, country_names: Iterable[str], fil
             if len(plot_df) == 0:
                 return None
             if fill_missing:
-                print(plot_df)
+                #print(plot_df)
                 plot_df.index = pd.to_datetime(plot_df['date'], format='%Y-%m-%d') # avoid callers having to specify 'on' keyword as they may not know which column
                 plot_df = fill_missing(plot_df)
-                print(plot_df)
+                #print(plot_df)
             return plot_df
         else:
             return None
@@ -145,7 +179,7 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single 
                     + p9.theme_classic()
                     + p9.labs(x="", y="Value", title=indicator.name)
                     + p9.theme(figure_size=(12, 6))
-                    + p9.scale_y_continuous(labels=label_shorten)
+                  #  + p9.scale_y_continuous(labels=label_shorten)
             )
             if "-yearly-" in indicator.tag:
                 plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
@@ -201,7 +235,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
 
     def plot_country_comparison(self, countries: Iterable[str], topic: WorldBankTopic, indicator: WorldBankIndicators) -> p9.ggplot:
         def make_plot():
-            df = fetch_data(indicator, countries, fill_missing=lambda df: df.resample('AS').asfreq()) # ensure df has gaps filled in with NAN
+            df = fetch_data(indicator, countries) # not resampling to fill gaps at this time
             #print(df)
             if df is None:
                 print(f"No usable data/plot for {indicator.name}")
@@ -212,7 +246,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
                     + p9.theme_classic()
                     + p9.labs(x="", y="Value", title=indicator.name)
                     + p9.theme(figure_size=(12, 6))
-                    + p9.scale_y_continuous(labels=label_shorten)
+              #      + p9.scale_y_continuous(labels=label_shorten)
                     + p9.scale_color_cmap_d()
             )
             if "-yearly-" in indicator.tag:
@@ -291,7 +325,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
                     + p9.theme_classic()
                     + p9.facet_wrap('~dataset', ncol=1, scales="free_y")
                     + p9.theme(figure_size=(12, n_datasets * 1.5))
-                    + p9.scale_y_continuous(labels=label_shorten)
+                 #   + p9.scale_y_continuous(labels=label_shorten)
             )
             if has_yearly: # any indicator yearly? if so, then we'll label them all with years only on the plot
                 plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
