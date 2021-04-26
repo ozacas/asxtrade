@@ -95,7 +95,7 @@ def fix_dataframe(i: dict, df: pd.DataFrame, countries, tag: str) -> tuple:
         if not re.match(r'^\d{4}$', unique_date):
             bad_dates.append(unique_date)
     if len(bad_dates) > 0:
-        print("WARNING: removing bad date entries from dataframe: {}".format(bad_dates))
+        print("WARNING: removing bad date entries from dataframe: {}".format(bad_dates)) # TODO FIXME... something smarter than this
         df = df[~df['date'].isin(bad_dates)]
     #print(df['date'].unique())
     if 'date' in attributes:
@@ -336,13 +336,13 @@ if __name__ == "__main__":
             time.sleep(a.delay)
             n_downloaded += 1
         except (RuntimeError, ValueError) as e:
-            print(f"Error processing {i}: {e}")
+            print(f"ERROR: when processing {i}: {e}")
             update_indicator(db, i, {
                 'last_error_when': now,
                 'last_error_msg': str(e),
                 'last_error_type': str(type(e))
             })
-            if args.fail_fast:
+            if a.fail_fast:
                 raise e
     print(f"Updated {n_downloaded} datasets. Run completed.")
     exit(0)
