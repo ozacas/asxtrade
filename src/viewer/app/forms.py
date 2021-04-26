@@ -160,7 +160,7 @@ class WorldBankSCMForm(forms.Form): # multi-country, single metric
 class WorldBankSCMMForm(forms.Form): # single country, multiple metrics over the same timeframe
     country = forms.ChoiceField(choices=(), required=True)
     topic = forms.ChoiceField(choices=(), required=True)
-    indicators = DynamicMultiChoiceField(choices=(), validators=[], required=True) # populated via AJAX
+    indicators = DynamicMultiChoiceField(choices=(), validators=[], required=True, widget=forms.widgets.SelectMultiple(attrs={'size': 12})) # populated via AJAX
 
     def __init__(self, countries: Iterable[tuple], topics: Iterable[tuple], indicators: Iterable[tuple], **kwargs):
         super(WorldBankSCMMForm, self).__init__(**kwargs)
