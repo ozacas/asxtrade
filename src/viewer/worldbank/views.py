@@ -26,12 +26,17 @@ def label_shorten(labels: Iterable[float]) -> Iterable[str]:
     This is only done if all labels in the plot end with zeros and all are sufficiently long to have enough zeros. Otherwise labels are untouched.
     """
     str_labels = []
+    non_zero_labels = []
     for v in labels:
-        str_labels.append(str(int(v)) if abs(v) > 100000.0 else "{:f}".format(v))  # NB: some plots have negative value tick marks, so we must handle it
+        magnitude_v = abs(v)
+        new_str = str(int(v)) if magnitude_v > 100000.0 else "{:f}".format(v)
+        str_labels.append(new_str)  # NB: some plots have negative value tick marks, so we must handle it
+        if magnitude_v > 1e-10:
+            non_zero_labels.append(new_str)
+
     #print(str_labels)
-    is_non_zero_lambda = lambda v: v not in ("0", "0.0")
-    non_zero_labels = list(filter(is_non_zero_lambda, str_labels))
     #print(non_zero_labels)
+    non_zero_labels_set = set(non_zero_labels)
 
     for units, short_label in [("000000000000", "T."), ("000000000", "B."), ("000000", "M.")]:
         found_cnt = 0
@@ -43,7 +48,7 @@ def label_shorten(labels: Iterable[float]) -> Iterable[str]:
             for old_label in str_labels:
                 #print(old_label)
                 #print(units)
-                if is_non_zero_lambda(old_label):
+                if old_label in non_zero_labels_set:
                     base_label = old_label[0:-len(units)]
                     new_label = base_label + short_label
                     new_labels.append(new_label)
@@ -179,7 +184,7 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single 
                     + p9.theme_classic()
                     + p9.labs(x="", y="Value", title=indicator.name)
                     + p9.theme(figure_size=(12, 6))
-                  #  + p9.scale_y_continuous(labels=label_shorten)
+                    + p9.scale_y_continuous(labels=label_shorten)
             )
             if "-yearly-" in indicator.tag:
                 plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
@@ -234,9 +239,17 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
         return form_class(countries_as_tuples, topics_as_tuples, indicators_as_tuples, **kwargs)
 
     def plot_country_comparison(self, countries: Iterable[str], topic: WorldBankTopic, indicator: WorldBankIndicators) -> p9.ggplot:
+        def fix_gaps(df: pd.DataFrame) -> pd.DataFrame:
+            df = df.resample('AS').asfreq()
+            df['country'] = next(iter(countries))
+            return df
+
         def make_plot():
-            df = fetch_data(indicator, countries) # not resampling to fill gaps at this time
-            #print(df)
+            resample_lambda = None
+            if len(countries) == 1:
+                resample_lambda = fix_gaps
+            df = fetch_data(indicator, countries, fill_missing=resample_lambda) # not resampling to fill gaps at this time, unless only one country is being plotted: TODO BUG FIXME
+            print(df)
             if df is None:
                 print(f"No usable data/plot for {indicator.name}")
                 raise Http404(f"No data for {countries} found in {indicator.wb_id}")
@@ -246,7 +259,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
                     + p9.theme_classic()
                     + p9.labs(x="", y="Value", title=indicator.name)
                     + p9.theme(figure_size=(12, 6))
-              #      + p9.scale_y_continuous(labels=label_shorten)
+                    + p9.scale_y_continuous(labels=label_shorten)
                     + p9.scale_color_cmap_d()
             )
             if "-yearly-" in indicator.tag:
