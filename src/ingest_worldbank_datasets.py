@@ -170,12 +170,27 @@ def save_inverted_index(db, metadata: dict, dataframe: pd.DataFrame, indicator: 
     return n_updated
     
 
-def purge_all_worldbank_data(db):
+def purge_all_worldbank_data(db) -> None:
     db.world_bank_countries.drop()
     db.world_bank_indicators.drop()
     db.world_bank_topics.drop()
     db.world_bank_inverted_index.drop()
     db.market_data_cache.remove({'scope': 'worldbank'})
+    print("All existing worldbank data removed from DB")
+
+
+def purge_obsolete_data(db, current_indicators: Iterable[str], known_indicators: Iterable[str]) -> None:
+    current_tags = set(current_indicators.keys())
+    obsolete_tags = set(known_indicators.keys()).difference(current_tags)
+    print("{} datasets are no longer served by worldbank website, removing due to user request".format(len(obsolete_tags)))
+
+    if len(obsolete_tags) > 0:
+        #db.world_bank_indicators.remove({ 'wb_id': {'$in': obsolete_tags}, 'scope': 'worldbank'})
+        print("Removed obsolete indicators")
+    obsolete_dataframes = set(db.market_data_cache.distinct('field')).difference(current_tags)
+    if len(obsolete_dataframes) > 0:
+        #db.market_data_cache.remove({'field': {'$in': obsolete_dataframes}, 'scope': 'worldbank'})
+        print("Removed obsolete dataframes")
 
 def update_indicator(db, tag: str, new_values: dict) -> None:
     assert db is not None
@@ -251,21 +266,17 @@ if __name__ == "__main__":
     current_indicators = all_indicators(db, update_local_db=a.all)
     indicators = current_indicators if a.all else known_indicators
     if a.rm_obsolete:
-        obsolete_tags = set(known_indicators.keys()).difference(set(current_indicators.keys()))
-        print("{} datasets are no longer served by worldbank website, removing due to --rm-obsolete".format(len(obsolete_tags)))
-        if len(obsolete_tags) > 0:
-            db.world_bank_indicators.remove({ 'wb_id': {'$in': obsolete_tags}})
+        purge_obsolete_data(db, current_indicators, known_indicators)
+    if a.clean:
+        purge_all_worldbank_data(db)
 
-    print("Found {} countries, {} topics and {} indicators in existing database.".format(len(countries), len(topics), len(indicators)))
+    print("Found {} countries, {} topics and {} indicators.".format(len(countries), len(topics), len(indicators)))
 
     month_ago = datetime.utcnow() - timedelta(days=30)
     recent_tags = set([i['tag'] for i in db.world_bank_inverted_index.find({}) if i['last_updated'] > month_ago])
     if not a.all:
         print("Ignoring {} datasets which have been downloaded and indexed in past month".format(len(recent_tags)))
-    if a.clean:
-        purge_all_worldbank_data(db)
-        print("All existing worldbank data removed from DB")
-    
+   
     # https://github.com/OliverSherouse/wbdata/issues/23 suggested fix as caching by default yields poor performance
     def inner():
         pass
