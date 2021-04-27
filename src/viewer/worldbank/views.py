@@ -167,6 +167,11 @@ def fetch_data(indicator: WorldBankIndicators, country_names: Iterable[str], fil
         else:
             return None
 
+def get_countries():
+    """Only return those countries with country codes that appear in the inverted index"""
+    country_codes_with_datasets = set(WorldBankInvertedIndex.objects.all().values_list('country', flat=True).distinct())
+    return [(c.country_code, c.name) for c in WorldBankCountry.objects.filter(country_code__in=country_codes_with_datasets).order_by('name')]
+
 def ajax_autocomplete_view(request):
     assert request.method == 'GET'
     topic_id = request.GET.get('topic_id', None)
@@ -194,7 +199,7 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single 
     def get_form(self, form_class=None):
         if form_class is None:
             form_class = self.get_form_class()
-        countries_as_tuples = [(c.country_code, c.name) for c in WorldBankCountry.objects.all().order_by('name')]
+        countries_as_tuples = get_countries()
         topics_as_tuples = [(t.id, t.topic) for t in WorldBankTopic.objects.all().order_by('topic')]
         kwargs = self.get_form_kwargs()
         data = kwargs.get('data', {})
@@ -247,7 +252,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
     def get_form(self, form_class=None):
         if form_class is None:
             form_class = self.get_form_class()
-        countries_as_tuples = [(c.country_code, c.name) for c in WorldBankCountry.objects.all().order_by('name')]
+        countries_as_tuples = get_countries()
         topics_as_tuples = [(t.id, t.topic) for t in WorldBankTopic.objects.all().order_by('topic')]
         kwargs = self.get_form_kwargs()
         data = kwargs.get('data', {})
@@ -314,7 +319,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
     def get_form(self, form_class=None):
         if form_class is None:
             form_class = self.get_form_class()
-        countries_as_tuples = [(c.country_code, c.name) for c in WorldBankCountry.objects.all().order_by('name')]
+        countries_as_tuples = get_countries()
         topics_as_tuples = [(t.id, t.topic) for t in WorldBankTopic.objects.all().order_by('topic')]
         kwargs = self.get_form_kwargs()
         data = kwargs.get('data', {})
