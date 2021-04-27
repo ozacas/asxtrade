@@ -168,7 +168,8 @@ def fetch_data(indicator: WorldBankIndicators, country_names: Iterable[str], fil
             return None
 
 def get_countries():
-    """Only return those countries with country codes that appear in the inverted index"""
+    """Only return those countries with country codes that appear in the inverted index ie. have datasets. Ordered tuples are returned suitable
+    for a HTML select form element. Tuples are ordered by printable country name. """
     country_codes_with_datasets = set(WorldBankInvertedIndex.objects.all().values_list('country', flat=True).distinct())
     return [(c.country_code, c.name) for c in WorldBankCountry.objects.filter(country_code__in=country_codes_with_datasets).order_by('name')]
 
