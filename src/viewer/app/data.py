@@ -16,6 +16,7 @@ import plotnine as p9
 import matplotlib.pyplot as plt
 from scipy.cluster.vq import kmeans,vq
 from sklearn.cluster import KMeans
+from threading import Lock
 
 
 def hash_str(key: str) -> str:
@@ -26,50 +27,62 @@ def hash_str(key: str) -> str:
 
 check_hash_collision_dict: dict = {}
 
+# for the sole use by cache_plot() it is designed to ensure thread safety of the underlying matplotlib backend which is not designed for
+# concurrent web-requests. Hopefully this is sufficient, but it may not be.
+exclusive_lock = Lock()
+
 def cache_plot(key: str, plot_factory=None, debug=True, timeout=120.0*60, django_cache=None, dont_cache=False) -> str:
     """
     Using the specified key compute try to find a suitable dynamic image via diskcache. If not found plot_factory() is invoked
     to compute the image. Cache retrieval is disabled if dont_cache is True (useful for debugging). Dynamic images are cached for 120mins by default.
     """
+    global exclusive_lock
+    assert exclusive_lock is not None
     assert plot_factory is not None
     
     if django_cache is None:
         django_cache = cache
 
-    # ensure all URLs are sha256 hexdigest's regardless of the key specified to avoid data leak and security from brute-forcing
-    cache_key = hash_str(key)
+    try:
+        exclusive_lock.acquire()
 
-    if debug: # check for unwanted collisions?
-        if cache_key in check_hash_collision_dict and key != check_hash_collision_dict[cache_key]:
-            raise ValueError("*** HASH collision! expected {key} but found: {check_hash_collision_dict[cache_key]}")
-        elif cache_key not in check_hash_collision_dict:
-            check_hash_collision_dict[cache_key] = key
+        # ensure all URLs are sha256 hexdigest's regardless of the key specified to avoid data leak and security from brute-forcing
+        cache_key = hash_str(key)
 
-    # plot already done and in cache?
-    if cache_key in django_cache and not dont_cache:
-        return cache_key
+        if debug: # check for unwanted collisions?
+            if cache_key in check_hash_collision_dict and key != check_hash_collision_dict[cache_key]:
+                raise ValueError("*** HASH collision! expected {key} but found: {check_hash_collision_dict[cache_key]}")
+            elif cache_key not in check_hash_collision_dict:
+                check_hash_collision_dict[cache_key] = key
 
-    with io.BytesIO(bytearray(200*1024)) as buf:
-        plot = plot_factory()
-        if plot is None:
-            django_cache.delete(cache_key)
-            return None
-        if isinstance(plot, p9.ggplot):
-            fig = plot.draw() # need to invoke matplotlib.savefig() so deref ...
-        else:
-            try:
-                fig = plot.gcf()
-            except AttributeError:
-                fig = plot # matplotlib figures dont have gcf callable, so we use savefig directly for them
-        fig.savefig(buf, format='png')
-        n_bytes = buf.seek(0, 1) # find out how many bytes have been written above by a "zero" seek
-        assert n_bytes > 0
-        buf.seek(0)
-        if debug:
-            print(f"Setting cache plot (timeout {timeout} sec.): {key} -> {cache_key} n_bytes={n_bytes}")
-        django_cache.set(cache_key, buf.read(n_bytes), timeout=timeout, read=True) # no page should take 10 minutes to render so this should guarantee object exists when served...
-        plt.close(fig)
-        return cache_key
+        # plot already done and in cache?
+        if cache_key in django_cache and not dont_cache:
+            return cache_key
+
+        # TODO FIXME... thread safety and proper locking for this code
+        with io.BytesIO(bytearray(200*1024)) as buf:
+            plot = plot_factory()
+            if plot is None:
+                django_cache.delete(cache_key)
+                return None
+            if isinstance(plot, p9.ggplot):
+                fig = plot.draw() # need to invoke matplotlib.savefig() so deref ...
+            else:
+                try:
+                    fig = plot.gcf()
+                except AttributeError:
+                    fig = plot # matplotlib figures dont have gcf callable, so we use savefig directly for them
+            fig.savefig(buf, format='png')
+            n_bytes = buf.seek(0, 1) # find out how many bytes have been written above by a "zero" seek
+            assert n_bytes > 0
+            buf.seek(0)
+            if debug:
+                print(f"Setting cache plot (timeout {timeout} sec.): {key} -> {cache_key} n_bytes={n_bytes}")
+            django_cache.set(cache_key, buf.read(n_bytes), timeout=timeout, read=True) # timeout must be large enough to be served on the page...
+            plt.close(fig)
+            return cache_key
+    finally:
+        exclusive_lock.release()
 
 def make_portfolio_performance_dataframe(stocks: Iterable[str], timeframe: Timeframe, purchases: Iterable[VirtualPurchase]) -> pd.DataFrame:
     def sum_portfolio(df: pd.DataFrame, date_str: str, stock_items):

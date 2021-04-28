@@ -349,8 +349,8 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
                 if "-yearly-" in i.tag:
                     has_yearly = True
                 pct_na = (df['metric'].isnull().sum() / len(df)) * 100.0
-                
-                if pct_na > 40.0 or len(df) <= 3:
+               
+                if pct_na > 30.0 or df['metric'].count() <= 3:
                     add_points = True
                 if plot_df is None:
                     plot_df = df

@@ -69,7 +69,8 @@ urlpatterns = [
     path("show/optimized/etfs/", optimised_etf_view, name="show-optimised-etfs"),
     path("cluster/kmeans/<str:stocks>", cluster_stocks_view, name="cluster-stocks-view"),
   
-    path("worldbank/", include('worldbank.urls'))
+    path("worldbank/", include('worldbank.urls')),
+    path("abs/", include("abs.urls"))
 ]
 
 

@@ -1,16 +1,16 @@
 from django.contrib import admin
 from worldbank.models import (
-    WorldBankCountry, 
-    WorldBankTopic, 
-    WorldBankIndicators, 
-    WorldBankInvertedIndex, 
+    WorldBankCountry,
+    WorldBankTopic,
+    WorldBankIndicators,
+    WorldBankInvertedIndex,
     WorldBankDataCache
 )
 
 @admin.register(WorldBankDataCache)
 class WorldBankDataCacheAdmin(admin.ModelAdmin):
     list_display= ('tag', 'last_updated')
-    
+
 @admin.register(WorldBankCountry)
 class WorldBankCountriesAdmin(admin.ModelAdmin):
     list_display = ('country_code', 'name', 'last_updated')
@@ -26,4 +26,5 @@ class WorldBankIndicatorsAdmin(admin.ModelAdmin):
 
 @admin.register(WorldBankInvertedIndex)
 class WorldBankInvertedIndexAdmin(admin.ModelAdmin):
-    list_display = ('id', 'country', 'topic_id', 'topic_name', 'n_attributes', 'last_updated', 'tag', 'indicator_id', 'indicator_name')
+    list_display = ('id', 'country', 'topic_id', 'topic_name', 'n_attributes',
+                    'last_updated', 'tag', 'indicator_id', 'indicator_name')
