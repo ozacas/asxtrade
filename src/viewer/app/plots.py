@@ -404,17 +404,26 @@ def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
                     axis_text_y=small_text)
     return plot
 
-def plot_breakdown(data_factory: Callable[[], tuple]):
+def plot_breakdown(data_factory: Callable[[], tuple]) -> tuple:
     """Stacked bar plot of increasing and decreasing stocks per sector in the specified df"""
     cip_df, top10, bottom10 = data_factory()
 
     cols_to_drop = [colname for colname in cip_df.columns if colname.startswith('bin_')]
     df = cip_df.drop(columns=cols_to_drop)
     df = pd.DataFrame(df.sum(axis='columns'), columns=['sum'])
-    df = df.merge(stocks_by_sector(), left_index=True, right_on='asx_code')
+    ss = stocks_by_sector()
+    # ss should be:
+    #             asx_code             sector_name
+    # asx_code                                 
+    # 14D           14D             Industrials
+    # 1AD           1AD             Health Care
+    # 1AG           1AG             Industrials
+    # 1AL           1AL  Consumer Discretionary........
+    #print(ss)
+    df = df.merge(ss, left_index=True, right_index=True)
 
     if len(df) == 0: # no stock in cip_df have a sector? ie. ETF?
-        return None
+        return None, top10, bottom10
 
     assert set(df.columns) == set(['sum', 'asx_code', 'sector_name'])
     df['increasing'] = df.apply(lambda row: 'up' if row['sum'] >= 0.0 else 'down', axis=1)
