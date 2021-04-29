@@ -238,7 +238,8 @@ def available_stocks(db, config):
               re.compile(r"\bETF\b"),
               re.compile(r"^ETFS\b"),
               re.compile(r"\bETF\s+UNITS\b"),
-              re.compile(r"\sETF$")
+              re.compile(r"\sETF$"),
+              re.compile(r"\sFUND$"),
              ]
     ret = set()
     for security_type in stocks:
