@@ -1,5 +1,12 @@
 import json
 import os
+import io
+import hashlib
+from datetime import datetime
+import pytz
+from bson.binary import Binary
+import pandas as pd
+
 
 def is_error(quotation: dict):
     assert quotation is not None
@@ -48,3 +55,43 @@ def read_config(filename, verbose=True):
         if password.startswith('$'):
             password = os.getenv(password[1:])
         return config, password
+
+
+def now():
+    return datetime.utcnow().replace(tzinfo=pytz.UTC)
+
+def save_dataframe(mongo_collection, i: dict, df: pd.DataFrame, tag: str, scope: str) -> None:
+    assert mongo_collection is not None
+    assert len(scope) > 0
+    assert len(tag) > 0
+    assert len(df) > 0
+    if scope == 'worldbank':
+        dataframe_id = i['wb_id']
+    elif scope == 'abs':
+        dataframe_id = i['field']
+    else:
+        raise NotImplementedError()
+
+    with io.BytesIO() as fp:
+        # NB: if this fails it may be because you are using fastparquet 
+        # which doesnt (yet) support BytesIO. Use eg. pyarrow
+        df.to_parquet(fp, compression='gzip', index=True)
+        fp.seek(0)
+        byte_content = fp.read()
+        size = len(byte_content)
+        sha256_hash = hashlib.sha256(byte_content).hexdigest()
+        mongo_collection.update_one({'tag': tag, 'scope': scope}, 
+            {"$set": {
+                'tag': tag, 'status': 'CACHED',
+                'last_updated': now(),
+                'field': dataframe_id,
+                'market': '',
+                'scope': scope,
+                'n_days': 0,
+                'n_stocks': 0,
+                'dataframe_format': 'parquet',
+                'size_in_bytes': size,
+                'sha256': sha256_hash,
+                'dataframe': Binary(byte_content), # NB: always parquet format
+        }}, upsert=True)
+        print(f"{tag} == {size} bytes (sha256 hexdigest {sha256_hash})")
