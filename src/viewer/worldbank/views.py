@@ -139,7 +139,7 @@ def worldbank_plot(df: pd.DataFrame, title: str, dates_are_yearly: bool, figure_
         plot += p9.scale_x_datetime(labels=date_format('%Y'))  # yearly data? if so only print the year on the x-axis
     # if pct_na is too high, geom_path() may be unable to draw a line (each value is surrounded by nan preventing a path)
     # so we use geom_point() to highlight the sparse nature of the data
-    if pct_na > 40.0 or add_points:
+    if pct_na >= 30.0 or add_points or df['metric'].count() <= 3:
         plot += p9.geom_point(size=3.0)
     return plot
 
@@ -207,7 +207,7 @@ class WorldBankSCSMView(LoginRequiredMixin, FormView): # single-country, single 
         selected_country = data.get('country', None)
         selected_topic = data.get('topic', None)
         if selected_topic is not None and selected_country is not None:
-            indicators_as_tuples, current_id = indicator_autocomplete_hits([selected_country], selected_topic, as_select_tuples=True)
+            indicators_as_tuples, _ = indicator_autocomplete_hits([selected_country], selected_topic, as_select_tuples=True)
         else:
             indicators_as_tuples = []
         return form_class(countries_as_tuples, topics_as_tuples, indicators_as_tuples, **kwargs)
@@ -262,7 +262,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
         
         if selected_countries is not None and selected_topic is not None:
             assert isinstance(selected_countries, list)
-            indicators_as_tuples, current_id = indicator_autocomplete_hits(selected_countries, selected_topic, as_select_tuples=True)
+            indicators_as_tuples, _ = indicator_autocomplete_hits(selected_countries, selected_topic, as_select_tuples=True)
         else:
             indicators_as_tuples = []
         return form_class(countries_as_tuples, topics_as_tuples, indicators_as_tuples, **kwargs)
@@ -284,6 +284,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
                 resample_lambda = fix_gaps
             df = fetch_data(indicator, countries, fill_missing=resample_lambda) # not resampling to fill gaps at this time, unless only one country is being plotted: TODO BUG FIXME
             kwargs = { 'group': "country", 'colour': "country"}
+            #print(df)
             return worldbank_plot(df, indicator.name, True, **kwargs)
 
         countries_str = "-".join(countries)
@@ -328,7 +329,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
         selected_topic = data.get('topic', None)
     
         if selected_country is not None and selected_topic is not None:
-            indicators_as_tuples, current_id = indicator_autocomplete_hits([selected_country], selected_topic, as_select_tuples=True)
+            indicators_as_tuples, _ = indicator_autocomplete_hits([selected_country], selected_topic, as_select_tuples=True)
         else:
             indicators_as_tuples = []
         #print(indicators_as_tuples)
