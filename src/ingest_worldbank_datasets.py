@@ -6,9 +6,6 @@ from google finance API using pandas_data_reader. This script is carefully writt
 data already existing in the specified database.
 """
 import argparse
-import io
-import hashlib
-import pytz
 import time
 import json
 import pandas as pd
@@ -18,7 +15,7 @@ import wbdata as wb
 from typing import Iterable
 from bson.binary import Binary
 from datetime import datetime, timedelta
-from utils import read_config
+from utils import read_config, save_dataframe, now
 
 
 # id = ObjectIdField(primary_key=True)
@@ -54,34 +51,6 @@ def as_tag(i: dict, freq: str) -> str:
         print(freq)
         assert False
     return f"{wb_id}-{printable_freq}-dataframe"
-
-def save_dataframe(db, i: dict, df: pd.DataFrame, tag: str) -> None:
-    assert len(df) > 0
-    wb_id = i['wb_id']
-
-    with io.BytesIO() as fp:
-        # NB: if this fails it may be because you are using fastparquet 
-        # which doesnt (yet) support BytesIO. Use eg. pyarrow
-        df.to_parquet(fp, compression='gzip', index=True)
-        fp.seek(0)
-        byte_content = fp.read()
-        size = len(byte_content)
-        sha256_hash = hashlib.sha256(byte_content).hexdigest()
-        db.market_data_cache.update_one({'tag': tag, 'scope': 'worldbank'}, 
-            {"$set": {
-                'tag': tag, 'status': 'CACHED',
-                'last_updated': datetime.utcnow().replace(tzinfo=pytz.UTC),
-                'field': wb_id,
-                'market': '',
-                'scope': 'worldbank',
-                'n_days': 0,
-                'n_stocks': 0,
-                'dataframe_format': 'parquet',
-                'size_in_bytes': size,
-                'sha256': sha256_hash,
-                'dataframe': Binary(byte_content), # NB: always parquet format
-        }}, upsert=True)
-        print(f"{tag} == {size} bytes (sha256 hexdigest {sha256_hash})")
 
 def fix_dataframe(i: dict, df: pd.DataFrame, countries, tag: str) -> tuple:
     df = df.reset_index(drop=False)
@@ -137,7 +106,6 @@ def has_topics(indicator: dict):
 def save_inverted_index(db, metadata: dict, dataframe: pd.DataFrame, indicator: dict, tag: str, countries: dict) -> int:
     df_countries = set(dataframe['country'].unique())
     n_topics = n_countries = 0
-    now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     n_updated = 0
    
     for t in get_topics(indicator):
@@ -211,21 +179,19 @@ def update_indicator(db, tag: str, new_values: dict) -> None:
 
 def all_countries(db):
     countries = {}
-    now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     for row in wb.get_country():
         assert isinstance(row, dict)
-        d = { 'country_code': row['id'], 'name': row['name'], 'last_updated': now} # none of the other state in row is saved in the model for now eg. incomeLevel/region
+        d = { 'country_code': row['id'], 'name': row['name'], 'last_updated': now()} # none of the other state in row is saved in the model for now eg. incomeLevel/region
         db.world_bank_countries.update_one({ 'country_code': row['id'] }, { "$set": d }, upsert=True)
         countries[d['name']] = d
     return countries
 
 def all_topics(db):
     topics = []
-    now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     for row in wb.get_topic():
         assert isinstance(row, dict)
         #print(row)
-        d = { 'id': int(row['id']), 'last_updated': now, 'topic': row['value'], 'source_note': row['sourceNote']}
+        d = { 'id': int(row['id']), 'last_updated': now(), 'topic': row['value'], 'source_note': row['sourceNote']}
         db.world_bank_topics.update_one({ 'id': d['id']}, {"$set": d }, upsert=True)
         topics.append(d)
 
@@ -233,7 +199,7 @@ def all_topics(db):
 
 def all_indicators(db, update_local_db=False):
     metrics = {}
-    now = datetime.utcnow().replace(tzinfo=pytz.UTC)
+    
     for row in wb.get_indicator():
         assert isinstance(row, dict)
         assert isinstance(row['sourceNote'], str) 
@@ -308,7 +274,6 @@ if __name__ == "__main__":
             print(f"WARNING: skipping dataset {wb_id} as it has no topics")
             continue
 
-        now = datetime.utcnow().replace(tzinfo=pytz.UTC)
         tag = as_tag(i, a.freq)
 
         if tag in recent_tags and not a.all:
@@ -325,20 +290,20 @@ if __name__ == "__main__":
                 print(f"WARNING: no data associated with {wb_id}")
                 continue
 
-            save_dataframe(db, i, df, tag)
+            save_dataframe(db.market_data_cache, i, df, tag, 'worldbank')
             
             n = save_inverted_index(db, metadata, df, i, tag, countries)
             print(f"Updated {n} records for {tag}")
             update_indicator(db, i, {
                 'last_successful_data': now,
-                'last_updated': now,
+                'last_updated': now(),
             })
             time.sleep(a.delay)
             n_downloaded += 1
         except (RuntimeError, ValueError) as e:
             print(f"ERROR: when processing {i}: {e}")
             update_indicator(db, i, {
-                'last_error_when': now,
+                'last_error_when': now(),
                 'last_error_msg': str(e),
                 'last_error_type': str(type(e))
             })
