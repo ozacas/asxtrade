@@ -33,7 +33,7 @@ def timing(f):
         result = f(*args, **kw)
         te = time()
         # print('func:%r args:[%r, %r] took: %2.4f sec' %  (f.__name__, args, kw, te-ts))
-        print("func:{} took: {} sec".format(f.__name__, te - ts))
+        print("func:{} took: {:.3f} sec".format(f.__name__, te - ts))
         return result
 
     return wrap
@@ -707,7 +707,7 @@ def cached_all_stocks_cip(timeframe: Timeframe):
 # NB: careful sizing the cache - dont want to use too much memory!
 dataframe_in_memory_cache = LFUCache(maxsize=100)
 
-
+@timing
 def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     """
     To save reading parquet files and constructing each pandas dataframe, we cache all that logic
@@ -747,7 +747,7 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
         dataframe_in_memory_cache[tag] = df
         return finalise_dataframe(df)
 
-
+@timing
 def make_superdf(required_tags, stock_codes):
     assert required_tags is not None and len(required_tags) >= 1
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
