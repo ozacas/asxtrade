@@ -25,11 +25,11 @@
    <img src="/png/{{ indicator_plot_uri }}" alt="Indicator plot">
 
    <p>
-       Data source: {{ indicator.source_organisation }}
+       Data source: {{ indicator.source_organisation |urlize }}
    </p>
 
    <p>
-       {{ indicator.source_note }}
+       {{ indicator.source_note |urlize }}
    </p>
    {% endif %}
 {% endblock %}
