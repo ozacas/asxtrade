@@ -127,7 +127,7 @@ def save_inverted_index(db, metadata: dict, dataframe: pd.DataFrame, indicator: 
                 raise ValueError(f"No topic for {indicator}")
             #print(t)
             d['topic_name'] = t.get('value', t.get('topic', None))
-            d['last_updated'] = now
+            d['last_updated'] = now()
             #print(d)
             #print(indicator)
             assert isinstance(topic_id, int)
@@ -208,7 +208,7 @@ def all_indicators(db, update_local_db=False):
         assert isinstance(row['name'], str)
         #print(row)
         d = {
-            'last_updated': now,
+            'last_updated': now(),
             'wb_id': row['id'],
             'source_note': row['sourceNote'],
             'name': row['name'],
@@ -295,7 +295,7 @@ if __name__ == "__main__":
             n = save_inverted_index(db, metadata, df, i, tag, countries)
             print(f"Updated {n} records for {tag}")
             update_indicator(db, i, {
-                'last_successful_data': now,
+                'last_successful_data': now(),
                 'last_updated': now(),
             })
             time.sleep(a.delay)
