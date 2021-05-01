@@ -52,8 +52,8 @@ def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
         }
     }
 
-@timing
-def make_fundamentals(timeframe: Timeframe, stock: str):
+def make_fundamentals(timeframe: Timeframe, stock: str) -> dict:
+    """Return a dict of the fundamentals plots for the current django template render to use"""
     def inner():
         df = company_prices(
             [stock],
