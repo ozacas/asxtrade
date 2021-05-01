@@ -81,7 +81,7 @@ def fix_dataframe(i: dict, df: pd.DataFrame, countries, tag: str) -> tuple:
 
     attribute_metadata['n_row'] = len(df)    # includes NA
     df = df.dropna(subset=['metric'], how='any')
-    attribute_metadata['n_row_not_na'] = attribute_metadata['n_row'] - len(df)
+    attribute_metadata['n_row_not_na'] = len(df)
     if 'country' in attributes:
         n_countries = df['country'].nunique()
         print(f"Found {n_countries} countries in {tag}")
@@ -171,11 +171,14 @@ def purge_obsolete_data(db, current_indicators: Iterable[str], known_indicators:
         #db.market_data_cache.remove({'field': {'$in': obsolete_dataframes}, 'scope': 'worldbank'})
         print("Removed obsolete dataframes")
 
-def update_indicator(db, tag: str, new_values: dict) -> None:
+def update_indicator(db, indicator: dict) -> None:
     assert db is not None
-    assert len(tag) > 0
-    assert len(new_values.keys()) > 0
-    db.world_bank_indicators.update_one({ "tag": tag, "scope": "worldbank" }, { "$set": new_values })
+    assert isinstance(indicator, dict) and len(indicator.keys()) > 0
+    indicator.pop('_id', None)
+    result = db.world_bank_indicators.update_one({ "wb_id": i['wb_id'], "scope": "worldbank" }, { "$set": indicator }, upsert=True)
+    assert isinstance(result, pymongo.results.UpdateResult)
+    assert result.upserted_id is not None or result.modified_count == 1
+    #print(result)
 
 def all_countries(db):
     countries = {}
@@ -253,6 +256,11 @@ if __name__ == "__main__":
 
     month_ago = datetime.utcnow() - timedelta(days=30)
     recent_tags = set([i['tag'] for i in db.world_bank_inverted_index.find({}) if i['last_updated'] > month_ago])
+    recent_error_tags = [as_tag(i, 'Y') for i in db.world_bank_indicators.find({'last_error_when': {'$gt': month_ago }})]
+    if len(recent_error_tags) > 0:
+        print("Skipping {} datasets which failed to be downloaded in past month".format(len(recent_error_tags)))
+        recent_tags = recent_tags.union(recent_error_tags)
+
     if not a.all:
         print("Ignoring {} datasets which have been downloaded and indexed in past month".format(len(recent_tags)))
    
@@ -294,19 +302,22 @@ if __name__ == "__main__":
             
             n = save_inverted_index(db, metadata, df, i, tag, countries)
             print(f"Updated {n} records for {tag}")
-            update_indicator(db, i, {
-                'last_successful_data': now(),
-                'last_updated': now(),
+            as_at = now()
+            i.update({
+                'last_successful_data': as_at,
+                'last_updated': as_at,
             })
+            update_indicator(db, i)
             time.sleep(a.delay)
             n_downloaded += 1
-        except (RuntimeError, ValueError) as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             print(f"ERROR: when processing {i}: {e}")
-            update_indicator(db, i, {
+            i.update({
                 'last_error_when': now(),
                 'last_error_msg': str(e),
                 'last_error_type': str(type(e))
             })
+            update_indicator(db, i)
             if a.fail_fast:
                 raise e
     print(f"Updated {n_downloaded} datasets. Run completed.")
