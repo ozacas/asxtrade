@@ -1,0 +1,9 @@
+<div class="mt-4">
+    <h3>Financial performance</h3>
+
+    {% if data is not None %}
+    {{ data | tabulate_as_html }}
+    {% else %}
+    <p>No financial performance available.</p>
+    {% endif %}
+</div>

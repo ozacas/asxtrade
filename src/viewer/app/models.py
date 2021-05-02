@@ -420,8 +420,8 @@ def user_watchlist(user):
 def all_available_dates(reference_stock="ANZ"):
     """
     Returns a sorted list of available dates where the reference stock has a price. stocks
-    which are suspended/delisted may have limited dates. The list is sorted from oldest to 
-    newest (ascending sort). As this is a frequently used query, an LRU cache is implemented 
+    which are suspended/delisted may have limited dates. The list is sorted from oldest to
+    newest (ascending sort). As this is a frequently used query, an LRU cache is implemented
     to avoid hitting the database too much.
     """
     # use reference_stock to quickly search the db by limiting the stocks searched
@@ -594,7 +594,7 @@ def find_movers(
     field="change_in_percent",
 ):
     """
-    Return a dataframe with row index set to ASX ticker symbols and the only column set to 
+    Return a dataframe with row index set to ASX ticker symbols and the only column set to
     the sum over all desired dates for percentage change in the stock price (by default). A negative sum
     implies a decrease, positive an increase in price over the observation period. Some fields are percentages, some AUD cents etc (it is up to the user to get it right)
     """
@@ -707,6 +707,7 @@ def cached_all_stocks_cip(timeframe: Timeframe):
 # NB: careful sizing the cache - dont want to use too much memory!
 dataframe_in_memory_cache = LFUCache(maxsize=100)
 
+
 @timing
 def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     """
@@ -746,6 +747,7 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
         df = pd.read_parquet(fp)
         dataframe_in_memory_cache[tag] = df
         return finalise_dataframe(df)
+
 
 @timing
 def make_superdf(required_tags, stock_codes):
@@ -813,11 +815,11 @@ def all_etfs():
         sname = security.security_name.lower()
         if "exchange traded fund units" in sname:
             etf_codes.add(security.asx_code)
-        elif 'etf units' in sname:
+        elif "etf units" in sname:
             etf_codes.add(security.asx_code)
-        elif sname.startswith('etfs '):
+        elif sname.startswith("etfs "):
             etf_codes.add(security.asx_code)
-        elif sname.endswith(' etf'):
+        elif sname.endswith(" etf"):
             etf_codes.add(security.asx_code)
 
     print("Found {} ETF codes".format(len(etf_codes)))
@@ -1023,13 +1025,15 @@ class VirtualPurchase(model.Model):
 
     def __str__(self):
         cur_price, pct_move = self.current_price()
-        return "Purchase on {}: ${} ({} shares@${:.2f}) is now ${:.2f} ({:.2f}%)".format(
-            self.buy_date,
-            self.amount,
-            self.n,
-            self.price_at_buy_date,
-            cur_price,
-            pct_move,
+        return (
+            "Purchase on {}: ${} ({} shares@${:.2f}) is now ${:.2f} ({:.2f}%)".format(
+                self.buy_date,
+                self.amount,
+                self.n,
+                self.price_at_buy_date,
+                cur_price,
+                pct_move,
+            )
         )
 
     class Meta:
@@ -1065,3 +1069,16 @@ def get_parquet(tag: str) -> pd.DataFrame:
     if cache_entry is not None:
         return cache_entry.dataframe
     return None
+
+
+class CompanyFinancialMetric(model.Model):
+    id = ObjectIdField(db_column="_id", primary_key=True)
+    asx_code = model.TextField(blank=False, null=False)
+    name = model.TextField(blank=False, null=False, db_column="metric")
+    value = model.FloatField()
+    as_at = model.DateTimeField(db_column="date")
+
+    objects = DjongoManager()
+
+    class Meta:
+        db_table = "asx_company_financial_metrics"
