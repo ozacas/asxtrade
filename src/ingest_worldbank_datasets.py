@@ -39,8 +39,8 @@ from utils import read_config, save_dataframe, now
     #     return f"{self.wb_id}-dataframe"
 
 def as_tag(i: dict, freq: str) -> str:
-    wb_id = i['wb_id']
-    assert wb_id is not None and len(wb_id) > 0
+    key = i['wb_id']
+    assert key is not None and len(key) > 0
     if freq == 'Y':
         printable_freq = 'yearly'
     elif freq == 'M':
@@ -50,7 +50,7 @@ def as_tag(i: dict, freq: str) -> str:
     else:
         print(freq)
         assert False
-    return f"{wb_id}-{printable_freq}-dataframe"
+    return f"{key}-{printable_freq}-dataframe"
 
 def fix_dataframe(i: dict, df: pd.DataFrame, countries, tag: str) -> tuple:
     df = df.reset_index(drop=False)
