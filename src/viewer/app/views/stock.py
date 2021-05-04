@@ -26,7 +26,7 @@ from app.analysis import (
     calculate_trends,
 )
 from app.messages import warning
-from app.data import cache_plot, make_point_score_dataframe
+from app.data import cache_plot, make_point_score_dataframe, label_shorten
 from app.plots import (
     plot_point_scores,
     plot_points_by_rule,
@@ -146,7 +146,7 @@ def show_financial_metrics(request, stock=None):
         raise Http404(f"No financial metrics available for {stock}")
 
     def inner():
-        df = data_df.filter(["Ebit", "Total Revenue"], axis=0)
+        df = data_df.filter(["Ebit", "Total Revenue", "Earnings"], axis=0)
         if len(df) < 2:
             print(f"WARNING: revenue and earnings not availabe for {stock}")
             return None
@@ -158,6 +158,8 @@ def show_financial_metrics(request, stock=None):
             + p9.geom_line(size=1.3)
             + p9.geom_point(size=3)
             + p9.theme(figure_size=(12, 6), subplots_adjust={"left": 0.2})
+            + p9.scale_y_continuous(labels=label_shorten)
+            + p9.scale_color_cmap_d()
             + p9.labs(x="", y="")
         )
         return plot

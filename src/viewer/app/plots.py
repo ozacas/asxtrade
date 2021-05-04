@@ -183,8 +183,8 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
 
 
 def plot_fundamentals(
-    df: pd.DataFrame, stock: str, line_size=1.5
-) -> str:  # pylint: disable=unused-argument
+    df: pd.DataFrame, stock: str, line_size=1.5  # pylint: disable=unused-argument
+) -> str:
     columns_to_report = [
         "pe",
         "eps",
@@ -360,8 +360,8 @@ def plot_company_rank(data_factory: Callable[[], tuple]) -> p9.ggplot:
 
 
 def plot_company_versus_sector(
-    df: pd.DataFrame, stock: str, sector: str
-) -> str:  # pylint: disable=unused-argument
+    df: pd.DataFrame, stock: str, sector: str  # pylint: disable=unused-argument
+) -> str:
     df["date"] = pd.to_datetime(df["date"])
     # print(df)
     plot = (
@@ -495,6 +495,7 @@ def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
             subplots_adjust={"wspace": 0.30},
             axis_text_x=small_text,
             axis_text_y=small_text,
+            figure_size=(12, 6),
         )
     )
     return plot

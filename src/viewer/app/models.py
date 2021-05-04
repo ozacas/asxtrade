@@ -714,7 +714,6 @@ def cached_all_stocks_cip(timeframe: Timeframe) -> pd.DataFrame:
 dataframe_in_memory_cache = LFUCache(maxsize=100)
 
 
-@timing
 def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     """
     To save reading parquet files and constructing each pandas dataframe, we cache all that logic
