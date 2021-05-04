@@ -16,7 +16,7 @@ Including another URLconf
 from django.contrib import admin
 from django.conf import settings
 from django.urls import path, include
-from app.views import * # pylint: disable=wildcard-import
+from app.views import *  # pylint: disable=wildcard-import
 
 
 urlpatterns = [
@@ -24,7 +24,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", show_all_stocks),
     path("png/<str:key>", png),
-    path("search/by-sector", sector_search, name='sector-search'),
+    path("search/by-sector", sector_search, name="sector-search"),
     path("search/by-yield", dividend_search),
     path("search/by-company", company_search),
     path("search/movers", mover_search),
@@ -38,7 +38,16 @@ urlpatterns = [
     path("show/watched", show_watched, name="show-watched"),
     path("show/etfs", show_etfs, name="show-etfs"),
     path("show/pe-trends", show_pe_trends, name="show-pe-trends"),
-    path("show/recent_sector_performance", show_recent_sector, name="recent-sector-performance"),
+    path(
+        "show/recent_sector_performance",
+        show_recent_sector,
+        name="recent-sector-performance",
+    ),
+    path(
+        "show/metrics/<str:stock>",
+        show_financial_metrics,
+        name="show-financial-metrics",
+    ),
     path("show/<str:stock>", show_stock, name="show-stock"),
     path(
         "show/outliers/sector/<int:sector_id>/<int:n_days>",
@@ -67,15 +76,17 @@ urlpatterns = [
         name="show-optimised-sector",
     ),
     path("show/optimized/etfs/", optimised_etf_view, name="show-optimised-etfs"),
-    path("cluster/kmeans/<str:stocks>", cluster_stocks_view, name="cluster-stocks-view"),
-  
-    path("worldbank/", include('worldbank.urls')),
-    path("abs/", include("abs.urls"))
+    path(
+        "cluster/kmeans/<str:stocks>", cluster_stocks_view, name="cluster-stocks-view"
+    ),
+    path("worldbank/", include("worldbank.urls")),
+    path("abs/", include("abs.urls")),
 ]
 
 
 if settings.DEBUG:
     import debug_toolbar
+
     urlpatterns = [
         path("__debug__/", include(debug_toolbar.urls)),
     ] + urlpatterns

@@ -2,8 +2,10 @@
 Responsible for providing detiled views about a single stock and closely related views
 """
 import pandas as pd
+import plotnine as p9
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
+from django.http import Http404
 from app.models import (
     validate_stock,
     validate_user,
@@ -11,12 +13,12 @@ from app.models import (
     cached_all_stocks_cip,
     companies_with_same_sector,
     Timeframe,
-    CompanyFinancialMetric,
     company_prices,
     rsi_data,
     user_watchlist,
     selected_cached_stocks_cip,
     timing,
+    financial_metrics,
 )
 from app.analysis import (
     default_point_score_rules,
@@ -136,6 +138,44 @@ def make_fundamentals(timeframe: Timeframe, stock: str) -> dict:
 
 
 @login_required
+def show_financial_metrics(request, stock=None):
+    validate_user(request.user)
+    validate_stock(stock)
+    data_df = financial_metrics(stock)
+    if data_df is None or len(data_df) < 1:
+        raise Http404(f"No financial metrics available for {stock}")
+
+    def inner():
+        df = data_df.filter(["Ebit", "Total Revenue"], axis=0)
+        if len(df) < 2:
+            print(f"WARNING: revenue and earnings not availabe for {stock}")
+            return None
+        df["metric"] = df.index
+        df = df.melt(id_vars="metric").dropna(how="any", axis=0)
+        # print(df)
+        plot = (
+            p9.ggplot(df, p9.aes(x="date", y="value", colour="metric"))
+            + p9.geom_line(size=1.3)
+            + p9.geom_point(size=3)
+            + p9.theme(figure_size=(12, 6), subplots_adjust={"left": 0.2})
+            + p9.labs(x="", y="")
+        )
+        return plot
+
+    er_uri = cache_plot(f"{stock}-earnings-revenue-plot", inner)
+    warning(
+        request,
+        "Due to experimental data ingest - data on this page may be wrong/misleading/inaccurate/missing. Use at own risk.",
+    )
+    context = {
+        "asx_code": stock,
+        "data": data_df,
+        "earnings_and_revenue_plot_uri": er_uri,
+    }
+    return render(request, "stock_financial_metrics.html", context=context)
+
+
+@login_required
 def show_stock(request, stock=None, n_days=2 * 365):
     """
     Displays a view of a single stock via the template and associated state
@@ -185,30 +225,8 @@ def show_stock(request, stock=None, n_days=2 * 365):
         },
         "fundamentals": make_fundamentals(plot_timeframe, stock),
         "stock_vs_sector": make_stock_sector(plot_timeframe, stock),
-        # pandas dataframe with dates as columns, rows as metrics (sorted nicely for the user) or None if no metrics available
-        "financial_metrics": financial_metrics(stock),
     }
     return render(request, "stock_page.html", context=context)
-
-
-def financial_metrics(stock: str) -> pd.DataFrame:
-    assert len(stock) > 0
-    qs = CompanyFinancialMetric.objects.filter(asx_code=stock)
-    rows = []
-    for metric in qs:
-        rows.append(
-            {
-                "date": metric.as_at,
-                "metric": metric.name,
-                "value": metric.value,
-            }
-        )
-    df = pd.DataFrame.from_records(rows)
-    if len(df) < 1:
-        return None
-    ret = df.pivot(index="metric", columns="date", values="value")
-    # print(ret)
-    return ret
 
 
 @login_required

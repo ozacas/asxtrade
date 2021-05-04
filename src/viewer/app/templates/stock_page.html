@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    {% include 'stock_information.html' with data=information %}
+    <div class="mt-4">
+        <table>
+            <tr>
+                <td class="padded"><a href="/data/financial-metrics-{{ asx_code }}/excel"
+                        class="btn btn-primary">Download balance
+                        sheet</a>
+                </td>
+            </tr>
+            <tr>
+                <td class="padded"><a href="/show/metrics/{{ asx_code}}" class="btn btn-primary">Show financial
+                        performance</a>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>
+<div class="row">
+    {% include 'stock_momentum.html' with data=momentum %}
+</div>
+<div class="row">
+    {% include 'stock_fundamentals.html' with data=fundamentals %}
+</div>
+<div class="row">
+    {% include 'stock_sector.html' with data=stock_vs_sector %}
+</div>
+
+{% include "user-messages.html" %}
+
+{% endblock %}

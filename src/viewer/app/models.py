@@ -432,6 +432,7 @@ def all_available_dates(reference_stock="ANZ"):
     return ret
 
 
+@timing
 def stock_info(stock: str, warning_cb=None) -> dict:
     assert len(stock) > 0
     securities = Security.objects.filter(asx_code=stock)
@@ -448,6 +449,7 @@ def stock_info(stock: str, warning_cb=None) -> dict:
     return result
 
 
+@timing
 @func.lru_cache(maxsize=1)
 def stocks_by_sector() -> pd.DataFrame:
     rows = [
@@ -493,6 +495,7 @@ def all_sectors() -> list:
     return results
 
 
+@timing
 def companies_with_same_sector(stock: str) -> set:
     """
     Return the set of all known companies designated with the same sector as the specified stock
@@ -503,6 +506,7 @@ def companies_with_same_sector(stock: str) -> set:
     return all_sector_stocks(cd.sector_name)
 
 
+@timing
 @func.lru_cache(maxsize=16)
 def all_sector_stocks(sector_name: str) -> set:
     """
@@ -696,8 +700,10 @@ def selected_cached_stocks_cip(stocks, timeframe: Timeframe) -> pd.DataFrame:
     return result_df
 
 
+@timing
 @func.lfu_cache(maxsize=4)
-def cached_all_stocks_cip(timeframe: Timeframe):
+def cached_all_stocks_cip(timeframe: Timeframe) -> pd.DataFrame:
+    # print(f"cached_all_stocks_cip({timeframe.description})")
     all_stocks_cip = company_prices(
         None, timeframe, fields="change_in_percent", missing_cb=None, transpose=True
     )
@@ -1082,3 +1088,23 @@ class CompanyFinancialMetric(model.Model):
 
     class Meta:
         db_table = "asx_company_financial_metrics"
+
+
+def financial_metrics(stock: str) -> pd.DataFrame:
+    assert len(stock) > 0
+    qs = CompanyFinancialMetric.objects.filter(asx_code=stock)
+    rows = []
+    for metric in qs:
+        rows.append(
+            {
+                "date": metric.as_at,
+                "metric": metric.name,
+                "value": metric.value,
+            }
+        )
+    df = pd.DataFrame.from_records(rows)
+    if len(df) < 1:
+        return None
+    ret = df.pivot(index="metric", columns="date", values="value")
+    # print(ret)
+    return ret

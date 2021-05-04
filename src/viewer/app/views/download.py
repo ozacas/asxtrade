@@ -5,7 +5,17 @@ on various pages for the user
 import tempfile
 from django.http import HttpResponse, Http404
 from django.contrib.auth.decorators import login_required
-from app.models import cached_all_stocks_cip, Timeframe, validate_user, user_watchlist, all_etfs, all_sector_stocks, Sector
+from app.models import (
+    cached_all_stocks_cip,
+    Timeframe,
+    validate_user,
+    user_watchlist,
+    all_etfs,
+    all_sector_stocks,
+    Sector,
+    validate_stock,
+    financial_metrics,
+)
 from app.data import make_kmeans_cluster_dataframe
 
 
@@ -18,7 +28,7 @@ def save_dataframe_to_file(df, filename, output_format):
         df.to_csv(filename)
         return "text/csv"
     elif output_format == "excel":
-        df.to_excel(filename)
+        df.to_excel(filename, engine="xlsxwriter")
         return "application/vnd.ms-excel"
     elif output_format == "tsv":
         df.to_csv(filename, sep="\t")
@@ -31,14 +41,20 @@ def save_dataframe_to_file(df, filename, output_format):
 
 
 def get_dataset(dataset_wanted, request):
-    assert dataset_wanted in set(["market_sentiment"]) or dataset_wanted.startswith("kmeans-")
+    assert (
+        dataset_wanted in set(["market_sentiment"])
+        or dataset_wanted.startswith("kmeans-")
+        or dataset_wanted.startswith("financial-metrics-")
+    )
 
     if dataset_wanted == "market_sentiment":
         df = cached_all_stocks_cip(Timeframe())
         return df
     elif dataset_wanted == "kmeans-watchlist":
         timeframe = Timeframe(past_n_days=300)
-        _, _, _, _, df = make_kmeans_cluster_dataframe(timeframe, 7, user_watchlist(request.user))
+        _, _, _, _, df = make_kmeans_cluster_dataframe(
+            timeframe, 7, user_watchlist(request.user)
+        )
         return df
     elif dataset_wanted == "kmeans-etfs":
         timeframe = Timeframe(past_n_days=300)
@@ -53,6 +69,17 @@ def get_dataset(dataset_wanted, request):
         timeframe = Timeframe(past_n_days=300)
         _, _, _, _, df = make_kmeans_cluster_dataframe(timeframe, 7, asx_codes)
         return df
+    elif dataset_wanted.startswith("financial-metrics-"):
+        stock = dataset_wanted[len("financial-metrics-") :]
+        validate_stock(stock)
+        df = financial_metrics(stock)
+        if df is not None:
+            # excel doesnt support timezones, so we remove it first
+            colnames = [d.strftime("%Y-%m-%d") for d in df.columns]
+            df.columns = colnames
+            # FALLTHRU
+        return df
+
     else:
         raise ValueError("Unsupported dataset {}".format(dataset_wanted))
 
@@ -68,5 +95,12 @@ def download_data(request, dataset=None, output_format="csv"):
         content_type = save_dataframe_to_file(df, fh.name, output_format)
         fh.seek(0)
         response = HttpResponse(fh.read(), content_type=content_type)
-        response["Content-Disposition"] = "inline; filename=temp.{}".format(output_format)
+        extension_by_format = {
+            "csv": "csv",
+            "excel": "xlsx",
+            "parquet": "pq",
+            "tsv": "tsv",
+        }
+        extension = extension_by_format[output_format]
+        response["Content-Disposition"] = "inline; filename=temp.{}".format(extension)
         return response

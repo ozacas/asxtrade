@@ -11,8 +11,8 @@ div.menubar {
   margin-right: 25px;
 }
 
-td {
-    padding:0 10px;
+td.padded {
+    padding:10px 10px;
 }
 
 tr.small {
