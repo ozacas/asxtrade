@@ -205,7 +205,8 @@ def show_stock(request, stock=None, n_days=2 * 365):
     company_details = stock_info(stock, lambda msg: warning(request, msg))
     momentum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-rsi-plot",
-        lambda: plot_momentum(data_factory, stock),
+        lambda: plot_momentum(data_factory, stock, plot_timeframe.earliest_date),
+        dont_cache=True,
     )
     monthly_maximum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-monthly-maximum-plot",

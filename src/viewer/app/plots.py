@@ -671,19 +671,20 @@ def relative_strength(prices, n=14):
     return rsi
 
 
-def plot_momentum(data_factory: Callable[[], tuple], stock: str) -> plt.Figure:
+def plot_momentum(
+    data_factory: Callable[[], tuple], stock: str, start_date: str
+) -> plt.Figure:
     assert len(stock) > 0
     stock_df, _ = data_factory()
-
-    # print(last_price)
-    # print(volume)
-    # print(day_low_price)
-    # print(day_high_price)
 
     last_price = stock_df["last_price"]
     volume = stock_df["volume"]
     day_low_price = stock_df["day_low_price"]
     day_high_price = stock_df["day_high_price"]
+    # print(last_price)
+    # print(volume)
+    # print(day_low_price)
+    # print(day_high_price)
 
     plt.rc("axes", grid=True)
     plt.rc("grid", color="0.75", linestyle="-", linewidth=0.5)
@@ -709,7 +710,6 @@ def plot_momentum(data_factory: Callable[[], tuple], stock: str) -> plt.Figure:
     fillcolor = "darkgoldenrod"
 
     timeline = pd.to_datetime(last_price.index)
-    # print(values)
     ax1.plot(timeline, rsi, color=fillcolor)
     ax1.axhline(70, color="darkgreen")
     ax1.axhline(30, color="darkgreen")
@@ -806,11 +806,9 @@ def plot_momentum(data_factory: Callable[[], tuple], stock: str) -> plt.Figure:
 
     plt.xticks(fontsize=8)
     try:
-        plt.xlim(left=timeline[200])
+        plt.xlim(left=datetime.strptime(start_date, "%Y-%m-%d"))
     except IndexError:
-        print(
-            "WARNING: 200 datapoints not available - some momentum data not available"
-        )
+        print("WARNING: unable to set plot start_date - things may look weird")
     plt.plot()
     fig = plt.gcf()
     plt.close(fig)
