@@ -58,7 +58,7 @@ def update_all_metrics(df: pd.DataFrame, asx_code: str) -> int:
     :rtype: the number of records updated/created is returned
     """
     print(f"Updating {len(df)} records for {asx_code}")
-    n += 1
+    n = 0
     for t in df.itertuples():
         d = {
             "metric": t.metric,
@@ -66,6 +66,7 @@ def update_all_metrics(df: pd.DataFrame, asx_code: str) -> int:
             "value": t.value,
             "asx_code": t.asx_code,
         }
+        assert t.asx_code == asx_code
         result = db.asx_company_financial_metrics.update_one(
             {"asx_code": asx_code, "date": t.date, "metric": t.metric},
             {"$set": d},

@@ -2,8 +2,6 @@
 Responsible for production of data visualisations and rendering this data as inline
 base64 data for various django templates to use.
 """
-import base64
-import io
 from datetime import datetime, timedelta
 from collections import Counter, defaultdict
 from typing import Iterable, Callable
@@ -13,13 +11,11 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
-from mizani.formatters import date_format
 from django.contrib.auth import get_user_model
 from app.models import (
     stocks_by_sector,
     Timeframe,
     timing,
-    selected_cached_stocks_cip,
     user_purchases,
     all_available_dates,
 )
@@ -891,7 +887,7 @@ def plot_boxplot_series(df, normalisation_method=None):
     normalisation_method should be one of the values present in
     SectorSentimentSearchForm.normalisation_choices
     """
-  
+
     # and plot the normalised data
     if normalisation_method is None or normalisation_method == "1":
         normalized_df = df

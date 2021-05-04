@@ -1,14 +1,14 @@
 """
 Responsible for implementing user search for finding companies of interest
 """
+from collections import defaultdict
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic.list import MultipleObjectTemplateResponseMixin
 from django.views.generic.edit import FormView
 from django.shortcuts import render
+import pandas as pd
 from app.mixins import SearchMixin
 from app.data import cache_plot
-from collections import defaultdict
-import pandas as pd
 from app.forms import (
     DividendSearchForm,
     SectorSearchForm,
@@ -19,7 +19,6 @@ from app.forms import (
 )
 from app.models import (
     Timeframe,
-    timing,
     Quotation,
     latest_quotation_date,
     valid_quotes_only,
