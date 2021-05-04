@@ -1,4 +1,8 @@
 #!/usr/bin/python3
+"""
+Responsible for ingesting data related to the business performance over time. Data is placed into the asx_company_financial_metric
+collection, ready for the core viewer app to use. Stocks whose financial details have been retrieved in the past month are skipped.
+"""
 import pymongo
 import argparse
 import yfinance as yf
@@ -48,6 +52,56 @@ def desired_stocks():
     return available_stocks.difference(recently_updated_stocks)
 
 
+def update_all_metrics(df: pd.DataFrame, asx_code: str) -> int:
+    """
+    Add (or update) all financial metrics (ie. rows) for the specified asx_code in the specified dataframe
+    :rtype: the number of records updated/created is returned
+    """
+    print(f"Updating {len(df)} records for {asx_code}")
+    n += 1
+    for t in df.itertuples():
+        d = {
+            "metric": t.metric,
+            "date": t.date,
+            "value": t.value,
+            "asx_code": t.asx_code,
+        }
+        result = db.asx_company_financial_metrics.update_one(
+            {"asx_code": asx_code, "date": t.date, "metric": t.metric},
+            {"$set": d},
+            upsert=True,
+        )
+        assert result is not None
+        assert isinstance(result, pymongo.results.UpdateResult)
+        assert result.matched_count == 1 or result.upserted_id is not None
+        n += 1
+    return n
+
+
+def fetch_metrics(asx_code: str) -> pd.DataFrame:
+    """
+    Using the excellent yfinance, we fetch all possible metrics of business performance for the specified stock code.
+    Returns a dataframe (possibly empty or none) representing each metric and its datapoints as separate rows
+    """
+    assert len(asx_code) >= 3
+    ticker = yf.Ticker(asx_code + ".AX")
+    cashflow_df = ticker.cashflow
+    financial_df = ticker.financials
+    earnings_df = ticker.earnings
+    if set(earnings_df.columns) == set(["Earnings", "Revenue"]):
+        earnings_df.index = earnings_df.index.map(
+            str
+        )  # convert years to str (maybe int)
+        earnings_df = earnings_df.transpose()
+
+    # print(earnings_df)
+    balance_sheet_df = ticker.balance_sheet
+    melted_df = melt_dataframes(
+        (cashflow_df, financial_df, earnings_df, balance_sheet_df)
+    )
+    return melted_df
+
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser(
         description="Update financial performance metrics for ASX stocks using yfinance"
@@ -81,40 +135,12 @@ if __name__ == "__main__":
     print(f"Updating financial metrics for {len(stock_codes)} stocks")
     for asx_code in stock_codes:
         try:
-            ticker = yf.Ticker(asx_code + ".AX")
-            cashflow_df = ticker.cashflow
-            financial_df = ticker.financials
-            earnings_df = ticker.earnings
-            if set(earnings_df.columns) == set(["Earnings", "Revenue"]):
-                earnings_df.index = earnings_df.index.map(
-                    str
-                )  # convert years to str (maybe int)
-                earnings_df = earnings_df.transpose()
-
-            # print(earnings_df)
-            balance_sheet_df = ticker.balance_sheet
-            melted_df = melt_dataframes(
-                (cashflow_df, financial_df, earnings_df, balance_sheet_df)
-            )
+            melted_df = fetch_metrics(asx_code)
             if melted_df is None or len(melted_df) < 1:
                 raise ValueError(f"No data availale for {asx_code}... skipping")
             melted_df["asx_code"] = asx_code
-            print(f"Updating {len(melted_df)} records for {asx_code}")
-            for t in melted_df.itertuples():
-                d = {
-                    "metric": t.metric,
-                    "date": t.date,
-                    "value": t.value,
-                    "asx_code": t.asx_code,
-                }
-                result = db.asx_company_financial_metrics.update_one(
-                    {"asx_code": asx_code, "date": t.date, "metric": t.metric},
-                    {"$set": d},
-                    upsert=True,
-                )
-                assert result is not None
-                assert isinstance(result, pymongo.results.UpdateResult)
-                assert result.matched_count == 1 or result.upserted_id is not None
+            ret = update_all_metrics(melted_df, asx_code)
+            assert ret == len(melted_df)
             time.sleep(a.delay)
         except Exception as e:
             print(f"WARNING: unable to download financials for {asx_code}")
