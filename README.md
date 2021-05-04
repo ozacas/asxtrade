@@ -8,6 +8,8 @@ Python3 based ASX data download and web application with basic features:
 
  * watchlist and sector stock lists, sortable by key metrics (eps, pe, daily change etc.)
 
+ * historical company metrics (cashflow, earnings, balance sheet) using [YFinance](https://pypi.org/project/yfinance/)
+
  * graphs of datasets over 12 months (or whatever data is available)
 
  * portfolio optimisation using [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html)
@@ -126,7 +128,7 @@ $ ls htmlcov
 Use of the Django Debug Toolbar is strongly recommended, but it does have a known limitation which prevents usage during normal operation due to the use of pandas within asxtrade: see <https://github.com/jazzband/django-debug-toolbar/issues/1053> for details. For this reason, the MIDDLEWARE setting for
 the toolbar is commented out, except when needed.
 
-### World Bank API data support (experimental)
+### Macroeconomic datasets: World Bank (experimental)
 
 Recent releases include support for API data integration using the excellent [wbdata](https://pypi.org/project/wbdata/), persisting the data to parquet format in the mongo database for the app. A utility script is provided to download this data: but it works very slowly to be nice to the Internet (only 2 datasets per minute). At that rate
 it would take over a week to download the entire dataset of nearly 18000 dataframes! Only year-based datasets are currently supported.
@@ -142,3 +144,21 @@ This program builds an inverted index of the WorldBank data, to speed searching 
  3. Many metrics for a single country
 
 Each analysis comes with its own visualisations and features. More to come...
+
+### Ingest data for ASX company financials (experimental)
+
+It is now possible, but entirely optional, to add company financial performance metrics (earnings, cashflow, balance sheet etc.) to an existing database:
+
+~~~~
+python3 ingest_financials.py --help
+~~~~
+
+Ingestion of financial metrics should be run when companies update the market on their performance (eg. mid-year and year-end). To be nice to Yahoo Finance API, it will take a couple of days to perform a complete run.
+
+It has [been observed](https://github.com/ranaroussi/yfinance/issues/250) that in some cases the data ingested can be wrong, 
+particularly for ASX stocks. Use at own risk. This function is therefore considered experimental and pages using this data are labelled with a warning.
+If data is not ingested, then the 'Show financial performance' button on stock views (as well as data download) will 404. This data is not available for ETFs at this time. It is planned to support search for companies by a metric. 
+
+### Macroeconomic datasets: Australian Bureau of Statistics (experimental)
+
+TODO FIXME... still waiting for an API key from the government.
