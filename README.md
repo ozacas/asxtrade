@@ -156,8 +156,8 @@ python3 ingest_financials.py --help
 Ingestion of financial metrics should be run when companies update the market on their performance (eg. mid-year and year-end). To be nice to Yahoo Finance API, it will take a couple of days to perform a complete run.
 
 It has [been observed](https://github.com/ranaroussi/yfinance/issues/250) that in some cases the data ingested can be wrong, 
-particularly for ASX stocks. Use at own risk. This function is therefore considered experimental and pages using this data are labelled with a warning.
-If data is not ingested, then the 'Show financial performance' button on stock views (as well as data download) will 404. This data is not available for ETFs at this time. It is planned to support search for companies by a metric. 
+particularly for ASX stocks. Use at own risk. This data is therefore considered experimental and pages using this data are labelled with a warning.
+If data is not ingested, then the 'Show financial performance' button on stock views (as well as data download) will 404. This data is not available for ETFs and some stocks at this time. It is planned to support search for companies by a metric. 
 
 ### Macroeconomic datasets: Australian Bureau of Statistics (experimental)
 

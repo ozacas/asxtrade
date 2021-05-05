@@ -8,6 +8,7 @@ import argparse
 import yfinance as yf
 import time
 from utils import read_config
+import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from bson.objectid import ObjectId
@@ -103,6 +104,73 @@ def fetch_metrics(asx_code: str) -> pd.DataFrame:
     return melted_df
 
 
+def make_asx_prices_dict(new_quote: tuple, asx_code: str) -> dict:
+    print(new_quote)
+
+    d = {
+        "asx_code": asx_code,
+        "fetch_date": new_quote.Index,
+        "volume": new_quote.Volume,
+        "last_price": new_quote.Close,
+        "day_low_price": new_quote.Low,
+        "day_high_price": new_quote.High,
+        "open_price": new_quote.Open,
+        "error_code": "",
+        "error_descr": "",
+        # we dont set nan fields so that existing values (if any) are used ie. merge with existing data
+        # "annual_dividend_yield": np.nan,  # no available data from yf.Ticker.history() although may be available elsewhere, but for now set to missing
+        # "annual_daily_volume": np.nan,
+        # "bid_price": np.nan,
+        "change_price": new_quote.change_price,
+        "change_in_percent": new_quote.change_in_percent,
+    }
+    return d
+
+
+def fill_stock_quote_gaps(db, stock_to_fetch: str, force=True) -> int:
+    assert db is not None
+    assert len(stock_to_fetch) >= 3
+    ticker = yf.Ticker(stock_to_fetch + ".AX")
+    df = ticker.history(period="max")
+    df.index = [d.strftime("%Y-%m-%d") for d in df.index]
+    # print(df)
+    available_dates = set(df.index)
+    available_quotes = list(db.asx_prices.find({"asx_code": stock_to_fetch}))
+    quoted_dates = set(
+        [q["fetch_date"] for q in available_quotes if not np.isnan(q["last_price"])]
+    )
+    assert set(df.columns) == set(
+        ["Open", "High", "Low", "Close", "Volume", "Dividends", "Stock Splits"]
+    )
+    dates_to_fill = (
+        available_dates.difference(quoted_dates) if not force else available_dates
+    )
+    print(
+        "Got {} existing daily quotes for {}, found {} yfinance daily quotes, gap filling for {} dates".format(
+            len(available_quotes), stock_to_fetch, len(df), len(dates_to_fill)
+        )
+    )
+    df["change_price"] = df["Close"].diff()
+    df["change_in_percent"] = df["Close"].pct_change() * 100.0
+    gap_quotes_df = df.filter(dates_to_fill, axis=0)
+    # print(df)
+    n = 0
+
+    for new_quote in gap_quotes_df.itertuples():
+        d = make_asx_prices_dict(new_quote, stock_to_fetch)
+        result = db.asx_prices.update_one(
+            {"fetch_date": d["fetch_date"], "asx_code": d["asx_code"]},
+            {"$set": d},
+            upsert=True,
+        )
+        assert result is not None
+
+        # assert result.modified_count == 1 or result.upserted_id is not None
+        n += 1
+    assert n == len(gap_quotes_df)
+    return n
+
+
 if __name__ == "__main__":
     args = argparse.ArgumentParser(
         description="Update financial performance metrics for ASX stocks using yfinance"
@@ -112,6 +180,11 @@ if __name__ == "__main__":
         help="Configuration file to use [config.json]",
         type=str,
         default="config.json",
+    )
+    args.add_argument(
+        "--fill-gaps",
+        help="Fill dates with no existing quotes for each stock (use --debug for a particular stock)",
+        action="store_true",
     )
     args.add_argument("--fail-fast", help="Stop on first error", action="store_true")
     args.add_argument(
@@ -142,6 +215,9 @@ if __name__ == "__main__":
             melted_df["asx_code"] = asx_code
             ret = update_all_metrics(melted_df, asx_code)
             assert ret == len(melted_df)
+            if a.fill_gaps:
+                fill_stock_quote_gaps(db, asx_code)
+                # FALLTHRU...
             time.sleep(a.delay)
         except Exception as e:
             print(f"WARNING: unable to download financials for {asx_code}")
