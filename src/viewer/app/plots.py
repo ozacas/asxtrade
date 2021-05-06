@@ -237,7 +237,7 @@ def plot_overall_portfolio(
 ) -> p9.ggplot:
     """
     Given a daily snapshot of virtual purchases plot both overall and per-stock
-    performance. Return a tuple of figures representing the performance as inline data.
+    performance. Return a ggplot instance representing the visualisation
     """
     portfolio_df = data_factory()
 
@@ -268,6 +268,7 @@ def plot_portfolio_contributors(
 
     all_dates = sorted(melted_df["date"].unique())
     df = melted_df[melted_df["date"] == all_dates[-1]]
+    # print(df)
     df = df[df["field"] == "stock_profit"]  # only latest profit is plotted
     df["contribution"] = [
         "positive" if profit >= 0.0 else "negative" for profit in df["value"]
@@ -286,44 +287,34 @@ def plot_portfolio_contributors(
 
 
 def plot_portfolio_stock_performance(
-    data_factory: Callable[[], pd.DataFrame], figure_size=(11, 5), date_text_size=7
+    data_factory: Callable[[], pd.DataFrame], figure_width: int = 12, date_text_size=7
 ) -> p9.ggplot:
-    def inner(pos_or_neg_val: float) -> float:
-        val = abs(pos_or_neg_val)
-        if (
-            val > 10000.0
-        ):  # TODO FIXME: these numbers dont take into account the total portfolio cost... or purchase size
-            return 1.0
-        elif val > 3000.0:
-            return 0.7
-        elif val < 500.0:  # stocks which are roughly breakeven are very transparent
-            return 0.2
-        else:
-            return 0.5
 
     df = data_factory()
+    df = df[df["stock_cost"] > 0.0]
+
     latest_date = df.iloc[-1, 6]
     latest_profit = df[df["date"] == latest_date]
-    alpha_by_stock = defaultdict(float)
-    for row in latest_profit.itertuples():
-        alpha_by_stock[row.stock] = inner(row.stock_profit)
+    # print(df)
+    pivoted_df = df.pivot(index="stock", columns="date", values="stock_profit")
+    mean_profit = pivoted_df.mean(axis=1)
+    n_stocks = len(mean_profit)
+    # if we want ~4 stocks per facet plot, then we need to specify the appropriate calculation for df.qcut()
+    bins = pd.qcut(mean_profit, int(100 / n_stocks) + 1)
+    # print(bins)
+    df = df.merge(bins.to_frame(name="bins"), left_on="stock", right_index=True)
+    # print(df)
+    # melted_df = make_portfolio_dataframe(df, melt=True)
 
-    melted_df = make_portfolio_dataframe(df, melt=True)
-    melted_df["alpha"] = melted_df["stock"].apply(
-        lambda stock: alpha_by_stock.get(stock, 1.0)
-    )
     plot = (
-        p9.ggplot(melted_df, p9.aes("date", "value", group="stock", colour="stock"))
+        p9.ggplot(df, p9.aes("date", "stock_profit", group="stock", colour="stock"))
         + p9.xlab("")
         + p9.geom_line(size=1.0)
-        + p9.scale_alpha(p9.aes(alpha="alpha"), guide=False)
-        + p9.facet_grid("field ~ contribution", scales="free_y")
+        + p9.facet_wrap("~bins", ncol=1, nrow=len(bins), scales="free_y")
         + p9.scale_colour_cmap_d()
         + p9.theme(
             axis_text_x=p9.element_text(angle=30, size=date_text_size),
-            figure_size=figure_size,
-            panel_spacing=0.5,  # more space between plots to avoid tick mark overlap
-            subplots_adjust={"right": 0.8},
+            figure_size=(figure_width, int(len(bins) * 1.2)),
         )
     )
     return plot

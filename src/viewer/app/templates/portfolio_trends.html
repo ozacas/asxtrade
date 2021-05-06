@@ -6,15 +6,14 @@
         <h3 class="mt-4">{{ overall_title }}</h3>
 
         <div class="overall-figure">
-        {% if performance_uri is None %}
-        {% else %}
+            {% if performance_uri is None %}
+            {% else %}
             <p>Displays the overall performance of the current watchlist virtual purchases
-               from the date purchased to the current date. No transaction fees are shown.
+                from the date purchased to the current date. No transaction fees are shown.
             </p>
-            <img class="portfolio-overall-figure"
-                 src="/png/{{ performance_uri }}"
-                 alt="Portfolio virtual performance" />
-        {% endif %}
+            <img class="portfolio-overall-figure" src="/png/{{ performance_uri }}"
+                alt="Portfolio virtual performance" />
+            {% endif %}
         </div>
 
         {% if contributors_uri is None %}
@@ -22,23 +21,20 @@
         <h3 class="profit-contributions mt-4">Profit/Loss contributors</h3>
 
         <div class="contributors-figure">
-            <img src="/png/{{ contributors_uri }}"
-               alt="Profit contributors" />
+            <img src="/png/{{ contributors_uri }}" alt="Profit contributors" />
         </div>
         {% endif %}
 
-        <h3 class="mt-4">{{ stock_title }}</h3>
+        <h3 class="mt-4">Virtual purchase profit/loss ($AUD) over time</h3>
 
         <div class="stock-figure">
-        {% if stock_performance_uri is None %}
-        {% else %}
+            {% if stock_performance_uri is None %}
+            {% else %}
             <p>Displays each stock which has been virtually purchased and it's
-               contribution towards profit/loss of the overall portfolio.
+                contribution towards profit/loss of the overall portfolio over time.
             </p>
-            <img class="stock-figure"
-                 src="/png/{{ stock_performance_uri }}"
-                 alt="Stock virtual performance" />
-        {% endif %}
+            <img class="stock-figure" src="/png/{{ stock_performance_uri }}" alt="Stock virtual performance" />
+            {% endif %}
         </div>
     </div>
 </div>
