@@ -44,4 +44,4 @@ def test_calculate_trends():
         assert val[1] < 1e-6
         assert val[2] == 0.0  # since 30 days data is not available, these must be zero
         assert val[3] == 0.0
-        print(val[4])
+        assert val[4] == "none"
