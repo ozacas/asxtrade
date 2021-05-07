@@ -928,3 +928,51 @@ def plot_sector_field(df: pd.DataFrame, field, n_col=3):
     )
 
     return plot
+
+
+def plot_sector_top_eps_contributors(
+    df: pd.DataFrame, stocks_by_sector_df: pd.DataFrame
+) -> p9.ggplot:
+    """
+    Returns a plot of the top 20 contributors per sector, based on the most recent EPS value per stock in the dataframe. If no
+    stocks in a given sector have positive EPS, the sector will not be plotted.
+    """
+    most_recent_date = df.columns[-1]
+    last_known_eps = df[most_recent_date]
+    last_known_eps = last_known_eps[last_known_eps >= 0.0].to_frame()
+    # print(stocks_by_sector_df)
+    last_known_eps = last_known_eps.merge(
+        stocks_by_sector_df, left_index=True, right_on="asx_code"
+    )
+    last_known_eps["rank"] = last_known_eps.groupby("sector_name")[
+        most_recent_date
+    ].rank("dense", ascending=False)
+    last_known_eps = last_known_eps[last_known_eps["rank"] <= 10.0]
+    n_sectors = last_known_eps["sector_name"].nunique()
+    last_known_eps["eps"] = last_known_eps[most_recent_date]
+
+    return (
+        p9.ggplot(
+            last_known_eps,
+            p9.aes(
+                y="eps",
+                x="reorder(asx_code,eps)",  # sort bars by eps within each sub-plot
+                group="sector_name",
+                fill="sector_name",
+            ),
+        )
+        + p9.geom_bar(stat="identity", show_legend=False)
+        + p9.facet_wrap("~sector_name", ncol=1, nrow=n_sectors, scales="free")
+        + p9.theme(
+            figure_size=(12, int(n_sectors * 1.5)),
+            axis_text_x=p9.element_text(size=6),
+            axis_text_y=p9.element_text(size=6),
+            subplots_adjust={"hspace": 0.40},
+        )
+        + p9.scale_fill_cmap_d()
+        + p9.labs(
+            y="EPS ($AUD)",
+            x="Top 10 ASX stocks per sector as at {}".format(most_recent_date),
+        )
+        + p9.coord_flip()
+    )

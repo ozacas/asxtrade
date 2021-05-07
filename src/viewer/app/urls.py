@@ -27,6 +27,7 @@ urlpatterns = [
     path("search/by-sector", sector_search, name="sector-search"),
     path("search/by-yield", dividend_search),
     path("search/by-company", company_search),
+    path("search/by-metric", financial_metric_search),
     path("search/movers", mover_search),
     path("search/market-cap", market_cap_search),
     path(

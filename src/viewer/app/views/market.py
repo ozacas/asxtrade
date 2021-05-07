@@ -26,6 +26,7 @@ from app.plots import (
     plot_market_wide_sector_performance,
     plot_market_cap_distribution,
     plot_sector_field,
+    plot_sector_top_eps_contributors,
 )
 
 
@@ -245,5 +246,10 @@ def show_pe_trends(request):
             sector_eps_cache_key, lambda: plot_sector_field(df, field="sum_eps")
         ),
         "market_pe_plot_uri": market_pe_plot_uri,
+        "sector_positive_top_contributors_eps_uri": cache_plot(
+            f"top-contributors-{sector_eps_cache_key}",
+            lambda: plot_sector_top_eps_contributors(eps_df, ss),
+            dont_cache=True,
+        ),
     }
     return render(request, "pe_trends.html", context)

@@ -119,8 +119,8 @@ class Timeframe:
         from_date = self.tf.get("from_date", None)
         to_date = self.tf.get("to_date", None)
         if all([from_date is not None, to_date is not None]):
-            print(from_date)
-            print(to_date)
+            # print(from_date)
+            # print(to_date)
             validate_date(from_date)
             validate_date(to_date)
             possible_dates = desired_dates(

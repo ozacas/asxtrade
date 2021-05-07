@@ -16,6 +16,7 @@ from app.forms import (
     CompanySearchForm,
     MarketCapSearchForm,
     SectorSentimentSearchForm,
+    FinancialMetricSearchForm,
 )
 from app.models import (
     Timeframe,
@@ -28,6 +29,7 @@ from app.models import (
     find_movers,
     find_named_companies,
     selected_cached_stocks_cip,
+    CompanyFinancialMetric,
 )
 from app.views.core import show_companies
 from app.plots import plot_boxplot_series
@@ -226,6 +228,69 @@ class CompanySearch(DividendYieldSearch):
 
 
 company_search = CompanySearch.as_view()
+
+
+class FinancialMetricSearchView(LoginRequiredMixin, FormView):
+    form_class = FinancialMetricSearchForm
+    template_name = "search_form.html"
+    action_url = "/search/by-metric"
+
+    def get_form(self, form_class=None):
+        if form_class is None:
+            form_class = self.get_form_class()
+        return form_class(
+            [
+                (v, v)
+                for v in sorted(
+                    list(
+                        CompanyFinancialMetric.objects.order_by("name")
+                        .values_list("name", flat=True)
+                        .distinct()
+                    )
+                )
+            ],
+            **self.get_form_kwargs(),
+        )
+
+    def form_valid(self, form):
+        """
+        Invoke show_companies()
+        """
+        wanted_metric = form.cleaned_data.get("metric", None)
+        wanted_value = form.cleaned_data.get("amount", None)
+        wanted_unit = form.cleaned_data.get("unit", "")
+        mult = 1 if not wanted_unit.endswith("(M)") else 1000 * 1000
+        wanted_relation = form.cleaned_data.get("relation", ">=")
+        print(f"{wanted_metric} {wanted_value} {mult} {wanted_relation}")
+
+        if all([wanted_metric, wanted_value, wanted_relation]):
+            matching_records = CompanyFinancialMetric.objects.filter(name=wanted_metric)
+            if wanted_relation == "<=":
+                matching_records = matching_records.filter(
+                    value__lte=wanted_value * mult
+                )
+            else:
+                matching_records = matching_records.filter(
+                    value__gte=wanted_value * mult
+                )
+            matching_stocks = set([m.asx_code for m in matching_records])
+            # its possible that some stocks have been delisted at the latest date, despite the financials being a match.
+            # They will be shown if the ASX data endpoint still returns data as at the latest quote date
+        else:
+            matching_stocks = Quotation.objects.none()
+
+        context = self.get_context_data()
+        context.update({"title": "Find companies by financial metric"})
+        return show_companies(
+            matching_stocks,
+            self.request,
+            Timeframe(past_n_days=30),
+            context,
+            self.template_name,
+        )
+
+
+financial_metric_search = FinancialMetricSearchView.as_view()
 
 
 class MarketCapSearch(MoverSearch):
