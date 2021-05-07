@@ -159,6 +159,9 @@ It has [been observed](https://github.com/ranaroussi/yfinance/issues/250) that i
 particularly for ASX stocks. Use at own risk. This data is therefore considered experimental and pages using this data are labelled with a warning.
 If data is not ingested, then the 'Show financial performance' button on stock views (as well as data download) will 404. This data is not available for ETFs and some stocks at this time. It is planned to support search for companies by a metric. 
 
+You can also use this program to fill gaps - as yfinance supports up to five years of historical data: use the `--fill-gaps` option for this. It is recommended to always fetch current data using
+`asxtrade.py` but at least historical prices can be filled in with this approach. There are numerous limitations with this approach: many fields of a quotation are left unchanged as no data is available.
+
 ### Macroeconomic datasets: Australian Bureau of Statistics (experimental)
 
 TODO FIXME... still waiting for an API key from the government.

@@ -7,14 +7,21 @@
     <h3>Trends for watched stocks over past 300 days</h3>
 
     <table style="width: 60%" class="mt-4">
-        <tr><th>Stock</th><th>Overall slope</th><th>NRMSE</th><th>30 day slope</th></tr>
+        <tr>
+            <th>Stock</th>
+            <th>R^2 (300 days)</th>
+            <th>NRMSE (300 days)</th>
+            <th>R^2 (30 days)</th>
+            <th>NRMSE (30 days)</th>
+        </tr>
         {% for stock, tuple in watchlist_trends.items %}
-            <tr class="{{ tuple.3 }}">
-                <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
-                <td>{{ tuple.0 |floatformat }}</td>
-                <td>{{ tuple.1 |floatformat }}</td>
-                <td>{{ tuple.2 }}</td>
-            </tr>
+        <tr class="{{ tuple.4 }}">
+            <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
+            <td>{{ tuple.0 |floatformat }}</td>
+            <td>{{ tuple.1 |floatformat }}</td>
+            <td>{{ tuple.2 |floatformat }}</td>
+            <td>{{ tuple.3 |floatformat }}</td>
+        </tr>
         {% endfor %}
     </table>
 </div>

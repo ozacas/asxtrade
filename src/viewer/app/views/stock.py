@@ -145,6 +145,15 @@ def show_financial_metrics(request, stock=None):
     if data_df is None or len(data_df) < 1:
         raise Http404(f"No financial metrics available for {stock}")
 
+    trending_metrics = calculate_trends(data_df)
+    good_fit_metrics = []
+    for k, t in trending_metrics.items():
+        if t[1] < 0.1:
+            good_fit_metrics.append(k)
+    print(
+        f"n_metrics == {len(data_df)} n_trending={len(trending_metrics.keys())} n_good_fit={len(good_fit_metrics)}"
+    )
+
     def inner():
         df = data_df.filter(["Ebit", "Total Revenue", "Earnings"], axis=0)
         if len(df) < 2:
@@ -242,7 +251,7 @@ def show_trends(request):
 
     def data_factory():
         cip = selected_cached_stocks_cip(stocks, timeframe)
-        trends = calculate_trends(cip, stocks)
+        trends = calculate_trends(cip)
         # print(trends)
         # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
         cip = rank_cumulative_change(cip.filter(trends.keys(), axis="index"), timeframe)

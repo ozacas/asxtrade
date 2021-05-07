@@ -14,11 +14,18 @@ from pypfopt import objective_functions
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.plotting import plot_covariance
 from pypfopt.hierarchical_portfolio import HRPOpt
-from app.models import company_prices, day_low_high, stocks_by_sector, Timeframe, validate_date
+from app.models import (
+    company_prices,
+    day_low_high,
+    stocks_by_sector,
+    Timeframe,
+    validate_date,
+)
 from app.data import cache_plot
 from app.messages import warning
 
-def as_css_class(thirty_day_slope, three_hundred_day_slope):
+
+def as_css_class(thirty_day_slope: float, three_hundred_day_slope: float) -> str:
     if thirty_day_slope > 0.0 and three_hundred_day_slope < 0.0:
         return "recent-upward-trend"
     elif thirty_day_slope < 0.0 and three_hundred_day_slope > 0.0:
@@ -26,64 +33,129 @@ def as_css_class(thirty_day_slope, three_hundred_day_slope):
     else:
         return "none"
 
-def calculate_trends(cumulative_change_df, watchlist_stocks):
+
+def calculate_trend_error(
+    x_data: np.ndarray, y_data: np.ndarray, fitted_parameters
+) -> tuple:
+    modelPredictions = np.polyval(fitted_parameters, x_data)
+    absolute_errors = modelPredictions - y_data
+
+    squared_errors = np.square(absolute_errors)
+    mean_squared_errors = np.mean(squared_errors)  # mean squared errors
+    root_mean_squared_error = np.sqrt(
+        mean_squared_errors
+    )  # Root Mean Squared Error, RMSE
+    y_var = np.var(y_data)
+
+    if y_var > 0.0:
+        r_squared = 1.0 - (np.var(absolute_errors) / y_var)
+    else:
+        r_squared = float(np.nan)
+    series_range = y_data.max() - y_data.min()
+    nrmse = root_mean_squared_error / series_range if abs(series_range) > 0.0 else 0.0
+
+    return nrmse, r_squared
+
+
+def calculate_trends(
+    df: pd.DataFrame,
+    polynomial_degree: int = 1,
+    nrmse_cutoff: float = 0.2,  # exclude poor fits
+    r_squared_cutoff: float = 0.05,
+) -> OrderedDict:
+    """
+    Use numpy polyfit to calculate the trends associated with all stocks (rows) in the specified dataframe. Each row is considered to be a
+    uniform timeseries eg. daily prices. An ordereddict of (stock, tuple) is returned describing the trend calculation.
+    """
+    assert polynomial_degree >= 1
+    assert nrmse_cutoff > 0.0
+    assert r_squared_cutoff >= 0.0
+    assert len(df) > 0
     trends = {}  # stock -> (slope, nrmse) pairs
-    for stock in watchlist_stocks:
-        series = cumulative_change_df.loc[stock]
+    for index_name, series in df.iterrows():
+        assert isinstance(
+            index_name, str
+        )  # maybe a stock, but not guaranteed as calculate_trends() is also used by financial metrics
+        assert isinstance(series, pd.Series)
+        series = series.dropna()  # NB: np.polyfit doesnt work with NA so...
         n = len(series)
         assert n > 0
-        series30 = series[-30:]
-        coefficients, residuals, _, _, _ = np.polyfit(range(n), series, 1, full=True)
-        coeff30, resid30, _, _, _ = np.polyfit(range(len(series30)), series30, 1, full=True)
-        assert resid30 is not None
-        mse = residuals[0] / n
-        series_range = series.max() - series.min()
-        if series_range == 0.0:
+        # print(n)
+        if n < 4:  # too few data points for a trend? if so, ignore the series
             continue
-        nrmse = np.sqrt(mse) / series_range
-        # ignore stocks which are barely moving either way
-        if any([np.isnan(coefficients[0]), np.isnan(nrmse), abs(coefficients[0]) < 0.01]):
-            pass
+
+        # timeseries have more than 30 days? if so, compute a short-term trend for the user
+        # print(series)
+        x_data = range(n)
+        fitted_parameters = np.polyfit(x_data, series, polynomial_degree, full=True)
+        nrmse, r_squared = calculate_trend_error(x_data, series, fitted_parameters[0])
+
+        if n > 30:
+            series30 = series[-30:]
+            x_30 = range(len(series30))
+            fp_30 = np.polyfit(x_30, series30, polynomial_degree, full=True)
+            nrmse_30, r_squared_30 = calculate_trend_error(x_30, series30, fp_30[0])
         else:
-            trends[stock] = (coefficients[0],
-                             nrmse,
-                             '{:.2f}'.format(coeff30[0]) if not np.isnan(coeff30[0]) else '',
-                             as_css_class(coeff30[0], coefficients[0]))
+            nrmse_30 = 0.0
+            r_squared_30 = 0.0
+            fp_30 = ((np.nan, np.nan), 1.0)
+
+        # reasonable trend identified?
+        # print(f"{index_name} {r_squared} {nrmse} {r_squared_30} {nrmse_30}")
+        if (abs(r_squared) > r_squared_cutoff and nrmse < nrmse_cutoff) or (
+            abs(r_squared_30) > r_squared_cutoff and nrmse_30 < nrmse_cutoff
+        ):
+            trends[index_name] = (
+                r_squared,
+                nrmse,
+                r_squared_30,
+                nrmse_30,
+                as_css_class(fp_30[0][0], fitted_parameters[0][0]),
+            )
     # sort by ascending overall slope (regardless of NRMSE)
-    return OrderedDict(sorted(trends.items(), key=lambda t: t[1][0]))
+    return OrderedDict(sorted(trends.items(), key=lambda t: t[0]))
+
 
 def rank_cumulative_change(df: pd.DataFrame, timeframe: Timeframe):
     cum_sum = defaultdict(float)
-    #print(df)
+    # print(df)
     for date in filter(lambda k: k in df.columns, timeframe.all_dates()):
         for code, price_change in df[date].fillna(0.0).iteritems():
             cum_sum[code] += price_change
-        rank = pd.Series(cum_sum).rank(method='first', ascending=False)
+        rank = pd.Series(cum_sum).rank(method="first", ascending=False)
         df[date] = rank
 
     all_available_dates = df.columns
-    avgs = df.mean(axis=1) # NB: do this BEFORE adding columns...
+    avgs = df.mean(axis=1)  # NB: do this BEFORE adding columns...
     assert len(avgs) == len(df)
-    df['x'] = all_available_dates[-1]
-    df['y'] = df[all_available_dates[-1]]
+    df["x"] = all_available_dates[-1]
+    df["y"] = df[all_available_dates[-1]]
 
-    bins = ['top', 'bin2', 'bin3', 'bin4', 'bin5', 'bottom']
+    bins = ["top", "bin2", "bin3", "bin4", "bin5", "bottom"]
     average_rank_binned = pd.cut(avgs, len(bins), bins)
     assert len(average_rank_binned) == len(df)
-    df['bin'] = average_rank_binned
-    df['asx_code'] = df.index
-    stock_sector_df = stocks_by_sector() # make one DB call (cached) rather than lots of round-trips
-    #print(stock_sector_df)
-    stock_sector_df = stock_sector_df.set_index('asx_code')
-    #print(df.index)
-    df['sector'] = [stock_sector_df.loc[code].sector_name for code in df.index]
-    df = pd.melt(df, id_vars=['asx_code', 'bin', 'sector', 'x', 'y'],
-                 var_name='date',
-                 value_name='rank',
-                 value_vars=all_available_dates)
-    df['date'] = pd.to_datetime(df['date'], format="%Y-%m-%d")
-    df['x'] = pd.to_datetime(df['x'], format="%Y-%m-%d")
+    df["bin"] = average_rank_binned
+    df["asx_code"] = df.index
+    stock_sector_df = (
+        stocks_by_sector()
+    )  # make one DB call (cached) rather than lots of round-trips
+    # print(stock_sector_df)
+    stock_sector_df = stock_sector_df.set_index("asx_code")
+    # print(df.index)
+    df = df.merge(
+        stock_sector_df, left_index=True, right_on="asx_code"
+    )  # NB: this merge will lose rows: those that dont have a sector eg. ETF's
+    df = pd.melt(
+        df,
+        id_vars=["asx_code", "bin", "sector_name", "x", "y"],
+        var_name="date",
+        value_name="rank",
+        value_vars=all_available_dates,
+    )
+    df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
+    df["x"] = pd.to_datetime(df["x"], format="%Y-%m-%d")
     return df
+
 
 def rule_move_up(state: dict):
     """
@@ -91,8 +163,9 @@ def rule_move_up(state: dict):
     """
     assert state is not None
 
-    move = state.get('stock_move')
+    move = state.get("stock_move")
     return 1 if move > 0.0 else 0
+
 
 def rule_market_avg(state: dict):
     """
@@ -101,12 +174,13 @@ def rule_market_avg(state: dict):
     """
     assert state is not None
 
-    move = state.get('stock_move')
-    market_avg = state.get('market_avg')
+    move = state.get("stock_move")
+    market_avg = state.get("market_avg")
     ret = 0
     if abs(move) >= abs(market_avg):
         ret = np.sign(move) * 2
     return ret
+
 
 def rule_sector_avg(state: dict):
     """
@@ -115,12 +189,13 @@ def rule_sector_avg(state: dict):
     """
     assert state is not None
 
-    move = state.get('stock_move')
-    sector_avg = state.get('sector_avg')
+    move = state.get("stock_move")
+    sector_avg = state.get("sector_avg")
 
     if abs(move) >= abs(sector_avg):
         return np.sign(move) * 3
     return 0
+
 
 def rule_signif_move(state: dict):
     """
@@ -128,12 +203,13 @@ def rule_signif_move(state: dict):
     """
     assert state is not None
 
-    move = state.get('stock_move') # percentage move
+    move = state.get("stock_move")  # percentage move
     if move >= 2.0:
         return 1
     elif move <= -2.0:
         return -1
     return 0
+
 
 def rule_against_market(state: dict):
     """
@@ -141,14 +217,15 @@ def rule_against_market(state: dict):
     the overall market AND sector in defiance of the global sentiment (eg. up on a down day)
     """
     assert state is not None
-    stock_move = state.get('stock_move')
-    market_avg = state.get('market_avg')
-    sector_avg = state.get('sector_avg')
+    stock_move = state.get("stock_move")
+    market_avg = state.get("market_avg")
+    sector_avg = state.get("sector_avg")
     if stock_move > 0.0 and market_avg < 0.0 and sector_avg < 0.0:
         return 1
     elif stock_move < 0.0 and market_avg > 0.0 and sector_avg > 0.0:
         return -1
     return 0
+
 
 def rule_at_end_of_daily_range(state: dict):
     """
@@ -156,39 +233,42 @@ def rule_at_end_of_daily_range(state: dict):
     Otherwise 0.
     """
     assert state is not None
-    day_low_high_df = state.get('day_low_high_df')
-    date = state.get('date')
-    threshold = state.get('daily_range_threshold')
-    if not 'bad_days' in state:
-        state['bad_days'] = 0
+    day_low_high_df = state.get("day_low_high_df")
+    date = state.get("date")
+    threshold = state.get("daily_range_threshold")
+    if not "bad_days" in state:
+        state["bad_days"] = 0
     try:
-        day_low = day_low_high_df.at[date, 'day_low_price']
-        day_high = day_low_high_df.at[date, 'day_high_price']
-        last_price = day_low_high_df.at[date, 'last_price']
+        day_low = day_low_high_df.at[date, "day_low_price"]
+        day_high = day_low_high_df.at[date, "day_high_price"]
+        last_price = day_low_high_df.at[date, "last_price"]
         if np.isnan(day_low) and np.isnan(day_high):
             return 0
-        day_range = (day_high - day_low) * threshold # 20% at either end of daily range
+        day_range = (day_high - day_low) * threshold  # 20% at either end of daily range
         if last_price >= day_high - day_range:
             return 1
         elif last_price <= day_low + day_range:
             return -1
         # else FALLTHRU...
     except KeyError:
-        #stock = state.get('stock')
-        state['bad_days'] += 1
+        # stock = state.get('stock')
+        state["bad_days"] += 1
     return 0
+
 
 def default_point_score_rules():
     """
     Return a list of rules to apply as a default list during analyse_point_scores()
     """
-    return [rule_move_up,
-            rule_market_avg,
-            rule_sector_avg,
-            rule_signif_move,
-            rule_against_market,
-            rule_at_end_of_daily_range
-            ]
+    return [
+        rule_move_up,
+        rule_market_avg,
+        rule_sector_avg,
+        rule_signif_move,
+        rule_against_market,
+        rule_at_end_of_daily_range,
+    ]
+
 
 def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     """
@@ -197,51 +277,69 @@ def detect_outliers(stocks: list, all_stocks_cip: pd.DataFrame, rules=None):
     """
     if rules is None:
         rules = default_point_score_rules()
-    str_rules = { str(r):r for r in rules }
+    str_rules = {str(r): r for r in rules}
     rows = []
-    stocks_by_sector_df = stocks_by_sector() # NB: ETFs in watchlist will have no sector
-    stocks_by_sector_df.index = stocks_by_sector_df['asx_code']
+    stocks_by_sector_df = (
+        stocks_by_sector()
+    )  # NB: ETFs in watchlist will have no sector
+    stocks_by_sector_df.index = stocks_by_sector_df["asx_code"]
     for stock in stocks:
-        #print("Processing stock: ", stock)
+        # print("Processing stock: ", stock)
         try:
-            sector = stocks_by_sector_df.at[stock, 'sector_name']
-            sector_companies = list(stocks_by_sector_df.loc[stocks_by_sector_df['sector_name'] == sector].asx_code)
+            sector = stocks_by_sector_df.at[stock, "sector_name"]
+            sector_companies = list(
+                stocks_by_sector_df.loc[
+                    stocks_by_sector_df["sector_name"] == sector
+                ].asx_code
+            )
             # day_low_high() may raise KeyError when data is currently being fetched, so it appears here...
             day_low_high_df = day_low_high(stock, all_stocks_cip.columns)
         except KeyError:
-            warning(None, "Unable to locate watchlist entry: {} - continuing without it".format(stock))
+            warning(
+                None,
+                "Unable to locate watchlist entry: {} - continuing without it".format(
+                    stock
+                ),
+            )
             continue
         state = {
-            'day_low_high_df': day_low_high_df,  # never changes each day, so we init it here
-            'all_stocks_change_in_percent_df': all_stocks_cip,
-            'stock': stock,
-            'daily_range_threshold': 0.20, # 20% at either end of the daily range gets a point
+            "day_low_high_df": day_low_high_df,  # never changes each day, so we init it here
+            "all_stocks_change_in_percent_df": all_stocks_cip,
+            "stock": stock,
+            "daily_range_threshold": 0.20,  # 20% at either end of the daily range gets a point
         }
         points_by_rule = defaultdict(int)
         for date in all_stocks_cip.columns:
             market_avg = all_stocks_cip[date].mean()
             sector_avg = all_stocks_cip[date].filter(items=sector_companies).mean()
             stock_move = all_stocks_cip.at[stock, date]
-            state.update({ 'market_avg': market_avg, 'sector_avg': sector_avg,
-                           'stock_move': stock_move, 'date': date })
+            state.update(
+                {
+                    "market_avg": market_avg,
+                    "sector_avg": sector_avg,
+                    "stock_move": stock_move,
+                    "date": date,
+                }
+            )
             for rule_name, rule in str_rules.items():
                 try:
                     points_by_rule[rule_name] += rule(state)
-                except TypeError: # handle nan's in dataset safely
+                except TypeError:  # handle nan's in dataset safely
                     pass
-        d = { 'stock': stock }
+        d = {"stock": stock}
         d.update(points_by_rule)
         rows.append(d)
     df = pd.DataFrame.from_records(rows)
-    df = df.set_index('stock')
-    #print(df)
+    df = df.set_index("stock")
+    # print(df)
     clf = IForest()
     clf.fit(df)
     scores = clf.predict(df)
     results = [row[0] for row, value in zip(df.iterrows(), scores) if value > 0]
-    #print(results)
+    # print(results)
     print("Found {} outlier stocks".format(len(results)))
     return results
+
 
 def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
     """Remove low weights as not significant contributors to portfolio performance"""
@@ -260,15 +358,21 @@ def clean_weights(weights: OrderedDict, portfolio, first_prices, latest_prices):
         cw[stock] = (stock, weight, n, after, before, n * (after - before))
         if total_weight >= 80.5 and len(cw.keys()) > 30:
             break
-    #print(clean_weights)
+    # print(clean_weights)
     return cw
+
 
 def portfolio_performance(optimizer):
     assert optimizer is not None
     pt = optimizer.portfolio_performance()
     assert len(pt) == 3
-    performance_dict = {'expected return': pt[0] * 100.0, 'volatility': pt[1] * 100.0, 'sharpe ratio': pt[2]}
+    performance_dict = {
+        "expected return": pt[0] * 100.0,
+        "volatility": pt[1] * 100.0,
+        "sharpe ratio": pt[2],
+    }
     return performance_dict
+
 
 def hrp_strategy(returns):
     assert returns is not None
@@ -276,12 +380,14 @@ def hrp_strategy(returns):
     weights = ef.optimize()
     return weights, portfolio_performance(ef), ef
 
+
 def ef_sharpe_strategy(returns=None, cov_matrix=None):
     assert returns is not None
     ef = EfficientFrontier(returns, cov_matrix)
-    ef.add_objective(objective_functions.L2_reg, gamma=0.1) # eliminate minor weights
+    ef.add_objective(objective_functions.L2_reg, gamma=0.1)  # eliminate minor weights
     weights = ef.max_sharpe()
     return weights, portfolio_performance(ef), ef
+
 
 def ef_risk_strategy(returns=None, cov_matrix=None, target_volatility=5.0):
     assert returns is not None
@@ -291,15 +397,17 @@ def ef_risk_strategy(returns=None, cov_matrix=None, target_volatility=5.0):
     weights = ef.efficient_risk(target_volatility=target_volatility)
     return weights, portfolio_performance(ef), ef
 
+
 def ef_minvol_strategy(returns=None, cov_matrix=None):
     ef = EfficientFrontier(returns, cov_matrix)
     ef.add_objective(objective_functions.L2_reg, gamma=0.1)
     weights = ef.min_volatility()
     return weights, portfolio_performance(ef), ef
 
+
 def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, min_price, warning_cb):
     """
-    Remove stocks which have no data at start/end of the timeframe despite imputation that has been performed. 
+    Remove stocks which have no data at start/end of the timeframe despite imputation that has been performed.
     This ensures that profit/loss can be calculated without missing data and that optimisation is not biased towards ridiculous outcomes.
     If min_price is not None, exclude all stocks with a start/end price less than min_price
     """
@@ -308,25 +416,40 @@ def remove_bad_stocks(df: pd.DataFrame, date_to_check: str, min_price, warning_c
     if len(missing_prices) > 0:
         df = df.drop(columns=missing_prices)
         if warning_cb:
-            warning_cb("Ignoring stocks with no data at {}: {}".format(date_to_check, missing_prices))
+            warning_cb(
+                "Ignoring stocks with no data at {}: {}".format(
+                    date_to_check, missing_prices
+                )
+            )
     if min_price is not None:
         bad_prices = list(df.columns[df.loc[date_to_check] <= min_price])
         if warning_cb:
-            warning_cb(f"Ignoring stocks with price < {min_price} at {date_to_check}: {bad_prices}")
+            warning_cb(
+                f"Ignoring stocks with price < {min_price} at {date_to_check}: {bad_prices}"
+            )
         df = df.drop(columns=bad_prices)
     return df
- 
-def setup_optimisation_matrices(stocks, timeframe: Timeframe, exclude_price, warning_cb):
-     # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
-    
-    stock_prices = company_prices(stocks, timeframe, fields='last_price', missing_cb=None)
-    stock_prices = stock_prices.fillna(method='bfill', limit=10, axis=0)
+
+
+def setup_optimisation_matrices(
+    stocks, timeframe: Timeframe, exclude_price, warning_cb
+):
+    # ref: https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html#processing-historical-prices
+
+    stock_prices = company_prices(
+        stocks, timeframe, fields="last_price", missing_cb=None
+    )
+    stock_prices = stock_prices.fillna(method="bfill", limit=10, axis=0)
     latest_date = stock_prices.index[-1]
     earliest_date = stock_prices.index[0]
-    #print(stock_prices)
+    # print(stock_prices)
 
-    stock_prices = remove_bad_stocks(stock_prices, earliest_date, exclude_price, warning_cb)
-    stock_prices = remove_bad_stocks(stock_prices, latest_date, exclude_price, warning_cb)
+    stock_prices = remove_bad_stocks(
+        stock_prices, earliest_date, exclude_price, warning_cb
+    )
+    stock_prices = remove_bad_stocks(
+        stock_prices, latest_date, exclude_price, warning_cb
+    )
 
     latest_prices = stock_prices.loc[latest_date]
     first_prices = stock_prices.loc[earliest_date]
@@ -336,14 +459,15 @@ def setup_optimisation_matrices(stocks, timeframe: Timeframe, exclude_price, war
     assert stock_prices.shape[1] == latest_prices.shape[0]
     assert stock_prices.shape[1] == all_returns.shape[1]
     assert all_returns.shape[0] == stock_prices.shape[0] - 1
-    assert len(stock_prices.columns) > 0 # must have at least 1 stock
-    assert len(stock_prices) > 7 # and at least one trading week of data
+    assert len(stock_prices.columns) > 0  # must have at least 1 stock
+    assert len(stock_prices) > 7  # and at least one trading week of data
 
-    #print(stock_prices.shape)
-    #print(latest_prices)
-    #print(all_returns.shape)
+    # print(stock_prices.shape)
+    # print(latest_prices)
+    # print(all_returns.shape)
 
     return all_returns, stock_prices, latest_prices, first_prices
+
 
 def assign_strategy(filtered_stocks: pd.DataFrame, algo: str, n_stocks: int) -> tuple:
     filtered_stocks = filtered_stocks.sample(n=n_stocks, axis=1)
@@ -353,26 +477,39 @@ def assign_strategy(filtered_stocks: pd.DataFrame, algo: str, n_stocks: int) -> 
     s = CovarianceShrinkage(filtered_stocks).ledoit_wolf()
 
     if algo == "hrp":
-        return (hrp_strategy,
-                "Hierarchical Risk Parity",
-                {'returns': returns}, mu, s)
+        return (hrp_strategy, "Hierarchical Risk Parity", {"returns": returns}, mu, s)
     elif algo == "ef-sharpe":
-        return (ef_sharpe_strategy, 
-                "Efficient Frontier - max. sharpe",
-                {'returns': mu, 'cov_matrix': s}, mu, s)
+        return (
+            ef_sharpe_strategy,
+            "Efficient Frontier - max. sharpe",
+            {"returns": mu, "cov_matrix": s},
+            mu,
+            s,
+        )
     elif algo == "ef-risk":
-        return (ef_risk_strategy,
-                "Efficient Frontier - efficient risk",
-                {'returns': mu, 'cov_matrix': s, 'target_volatility': 5.0}, mu, s)
+        return (
+            ef_risk_strategy,
+            "Efficient Frontier - efficient risk",
+            {"returns": mu, "cov_matrix": s, "target_volatility": 5.0},
+            mu,
+            s,
+        )
     elif algo == "ef-minvol":
-        return (ef_minvol_strategy,
-                "Efficient Frontier - minimum volatility",
-                {'returns': mu, 'cov_matrix': s}, mu, s)
+        return (
+            ef_minvol_strategy,
+            "Efficient Frontier - minimum volatility",
+            {"returns": mu, "cov_matrix": s},
+            mu,
+            s,
+        )
     else:
         assert False
 
-def select_suitable_stocks(all_returns, stock_prices, max_stocks, n_unique_min, var_min):
-     # drop columns were there is no activity (ie. same value) in the observation period
+
+def select_suitable_stocks(
+    all_returns, stock_prices, max_stocks, n_unique_min, var_min
+):
+    # drop columns were there is no activity (ie. same value) in the observation period
     cols_to_drop = list(all_returns.columns[all_returns.nunique() < n_unique_min])
 
     print("Dropping due to inactivity: {}".format(cols_to_drop))
@@ -381,27 +518,39 @@ def select_suitable_stocks(all_returns, stock_prices, max_stocks, n_unique_min, 
     low_var = v[v < var_min]
     print("Dropping due to low variance: {}".format(low_var.index))
     cols_to_drop.extend(low_var.index)
-    #print("Stocks ignored due to inactivity: {}".format(cols_to_drop))
+    # print("Stocks ignored due to inactivity: {}".format(cols_to_drop))
     filtered_stocks = stock_prices.drop(columns=cols_to_drop)
     colnames = filtered_stocks.columns
     n_stocks = max_stocks if len(colnames) > max_stocks else len(colnames)
     return filtered_stocks, n_stocks
 
-def run_iteration(title, strategy, first_prices, latest_prices, total_portfolio_value, n_stocks, mu, s, filtered_stocks, **kwargs):
+
+def run_iteration(
+    title,
+    strategy,
+    first_prices,
+    latest_prices,
+    total_portfolio_value,
+    n_stocks,
+    mu,
+    s,
+    filtered_stocks,
+    **kwargs,
+):
     weights, performance_dict, _ = strategy(**kwargs)
-    allocator = DiscreteAllocation(weights,
-                                   first_prices,
-                                   total_portfolio_value=total_portfolio_value)
+    allocator = DiscreteAllocation(
+        weights, first_prices, total_portfolio_value=total_portfolio_value
+    )
     fig, ax = plt.subplots()
     portfolio, leftover_funds = allocator.greedy_portfolio()
-    #print(portfolio)
+    # print(portfolio)
     cleaned_weights = clean_weights(weights, portfolio, first_prices, latest_prices)
-    
+
     # disabled due to TypeError during deepcopy of OSQP results object
-    #if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
+    # if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
     #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
-    volatility = performance_dict.get('volatility')
-    expected_return = performance_dict.get('expected return')
+    volatility = performance_dict.get("volatility")
+    expected_return = performance_dict.get("expected return")
     ax.scatter(volatility, expected_return, marker="*", s=100, c="r", label="Portfolio")
     ax.set_xlabel("Volatility")
     ax.set_ylabel("Returns (%)")
@@ -424,34 +573,83 @@ def run_iteration(title, strategy, first_prices, latest_prices, total_portfolio_
     efficient_frontier_plot = cache_plot(secrets.token_urlsafe(32), lambda: fig)
 
     # only plot covmatrix/corr for significant holdings to ensure readability
-    m = CovarianceShrinkage(filtered_stocks[list(cleaned_weights.keys())[:30]]).ledoit_wolf()
-    #print(m)
+    m = CovarianceShrinkage(
+        filtered_stocks[list(cleaned_weights.keys())[:30]]
+    ).ledoit_wolf()
+    # print(m)
     cor_plot = plot_covariance(m, plot_correlation=True)
-    
+
     correlation_plot = cache_plot(secrets.token_urlsafe(32), lambda: cor_plot.figure)
     assert isinstance(cleaned_weights, OrderedDict)
-    return cleaned_weights, performance_dict, \
-            efficient_frontier_plot, correlation_plot, \
-            title, total_portfolio_value, leftover_funds, len(latest_prices)
-  
+    return (
+        cleaned_weights,
+        performance_dict,
+        efficient_frontier_plot,
+        correlation_plot,
+        title,
+        total_portfolio_value,
+        leftover_funds,
+        len(latest_prices),
+    )
 
-def optimise_portfolio(stocks, timeframe: Timeframe, algo="ef-minvol", max_stocks=80, total_portfolio_value=100*1000, exclude_price=None, warning_cb=None):
+
+def optimise_portfolio(
+    stocks,
+    timeframe: Timeframe,
+    algo="ef-minvol",
+    max_stocks=80,
+    total_portfolio_value=100 * 1000,
+    exclude_price=None,
+    warning_cb=None,
+):
     assert len(stocks) >= 1
     assert timeframe is not None
     assert total_portfolio_value > 0
     assert max_stocks >= 5
 
-    all_returns, stock_prices, latest_prices, first_prices = setup_optimisation_matrices(stocks, timeframe, exclude_price, warning_cb)
+    (
+        all_returns,
+        stock_prices,
+        latest_prices,
+        first_prices,
+    ) = setup_optimisation_matrices(stocks, timeframe, exclude_price, warning_cb)
     for t in ((10, 0.0001), (20, 0.0005), (30, 0.001), (40, 0.005), (50, 0.01)):
-        filtered_stocks, n_stocks = select_suitable_stocks(all_returns, stock_prices, max_stocks, *t)
-        strategy, title, kwargs, mu, s = assign_strategy(filtered_stocks, algo, n_stocks)
+        filtered_stocks, n_stocks = select_suitable_stocks(
+            all_returns, stock_prices, max_stocks, *t
+        )
+        strategy, title, kwargs, mu, s = assign_strategy(
+            filtered_stocks, algo, n_stocks
+        )
         try:
-            return run_iteration(title, strategy, first_prices, latest_prices, total_portfolio_value, n_stocks, mu, s, filtered_stocks, **kwargs)
+            return run_iteration(
+                title,
+                strategy,
+                first_prices,
+                latest_prices,
+                total_portfolio_value,
+                n_stocks,
+                mu,
+                s,
+                filtered_stocks,
+                **kwargs,
+            )
         except ValueError as ve:
             if warning_cb:
-                warning_cb("Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(t[0], t[1], n_stocks, str(ve)))
+                warning_cb(
+                    "Unable to optimise stocks with min_unique={} and var_min={}: n_stocks={} - {}".format(
+                        t[0], t[1], n_stocks, str(ve)
+                    )
+                )
             # try next iteration
-        
-    print("*** WARNING: unable to optimise portolio!")
-    return (None, None, None, None, title, total_portfolio_value, 0.0, len(latest_prices))
 
+    print("*** WARNING: unable to optimise portolio!")
+    return (
+        None,
+        None,
+        None,
+        None,
+        title,
+        total_portfolio_value,
+        0.0,
+        len(latest_prices),
+    )
