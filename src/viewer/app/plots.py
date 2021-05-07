@@ -25,36 +25,8 @@ from app.data import (
     make_portfolio_dataframe,
     cache_plot,
     make_portfolio_performance_dataframe,
+    price_change_bins,
 )
-
-
-def price_change_bins():
-    """
-    Return the change_in_percent bins and their label as a tuple for heatmap_market() to use and the
-    plotting code. These are non-uniform bins, designed to be fairly sensitive to major market moves.
-    """
-    bins = [
-        -1000.0,
-        -100.0,
-        -10.0,
-        -5.0,
-        -3.0,
-        -2.0,
-        -1.0,
-        -1e-6,
-        0.0,
-        1e-6,
-        1.0,
-        2.0,
-        3.0,
-        5.0,
-        10.0,
-        25.0,
-        100.0,
-        1000.0,
-    ]
-    labels = ["{}".format(b) for b in bins[1:]]
-    return (bins, labels)
 
 
 def cached_heatmap(
@@ -293,8 +265,8 @@ def plot_portfolio_stock_performance(
     df = data_factory()
     df = df[df["stock_cost"] > 0.0]
 
-    latest_date = df.iloc[-1, 6]
-    latest_profit = df[df["date"] == latest_date]
+    # latest_date = df.iloc[-1, 6]
+    # latest_profit = df[df["date"] == latest_date]
     # print(df)
     pivoted_df = df.pivot(index="stock", columns="date", values="stock_profit")
     mean_profit = pivoted_df.mean(axis=1)

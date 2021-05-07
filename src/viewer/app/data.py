@@ -383,3 +383,33 @@ def make_kmeans_cluster_dataframe(
     idx, _ = vq(data, centroids)
     data_df["cluster_id"] = idx
     return distortion, chosen_k, centroids, idx, data_df
+
+
+def price_change_bins() -> tuple:
+    """
+    Return the change_in_percent numeric bins and corresponding labels as a tuple-of-lists for sentiment heatmaps to use and the
+    plotting code. These are non-uniform bins, designed to be fairly sensitive to major market moves.
+
+    """
+    bins = [
+        -1000.0,
+        -100.0,
+        -10.0,
+        -5.0,
+        -3.0,
+        -2.0,
+        -1.0,
+        -1e-6,
+        0.0,
+        1e-6,
+        1.0,
+        2.0,
+        3.0,
+        5.0,
+        10.0,
+        25.0,
+        100.0,
+        1000.0,
+    ]
+    labels = ["{}".format(b) for b in bins[1:]]
+    return (bins, labels)
