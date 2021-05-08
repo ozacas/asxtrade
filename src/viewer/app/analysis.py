@@ -81,8 +81,8 @@ def calculate_trends(
         n = len(series)
         assert n > 0
         # print(n)
-        if (
-            n < 2 + polynomial_degree
+        if n < max(
+            4, 2 + polynomial_degree
         ):  # too few data points for a trend? if so, ignore the series
             continue
 
