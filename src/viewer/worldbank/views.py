@@ -462,6 +462,17 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
             dont_cache=True,
         )
 
+    def dedupe_indicators(self, selected_indicators) -> list:
+        indicators = []
+        seen = set()
+        for dataset in WorldBankIndicators.objects.filter(
+            wb_id__in=set(selected_indicators)
+        ):
+            if not dataset.wb_id in seen:
+                indicators.append(dataset)
+                seen.add(dataset.wb_id)
+        return indicators
+
     def form_valid(self, form):
         selected_country = form.cleaned_data.get("country", None)
         selected_topic = form.cleaned_data.get("topic", None)
@@ -472,9 +483,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
         if topic is None:
             raise Http404("No such topic: -{}-".format(topic))
         country = WorldBankCountry.objects.filter(country_code=selected_country).first()
-        indicators = WorldBankIndicators.objects.filter(
-            wb_id__in=set(selected_indicators)
-        )
+        indicators = self.dedupe_indicators(selected_indicators)
         n_indicators = len(indicators)
         context = self.get_context_data()
         context.update(
