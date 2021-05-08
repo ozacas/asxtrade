@@ -2,8 +2,6 @@
 import argparse
 import dateutil
 import json
-import platform
-import tempfile
 import time
 import requests
 from random import randint
@@ -72,14 +70,6 @@ def update_companies(db, config, ensure_indexes=True):
         )
     )
 
-def get_tempfile():
-    """
-    As suggested in PR#7, some systems dont permit use of a named file when delete == True
-    """
-    tempfile_kwargs = {}
-    if platform.system() == 'Windows':
-        tempfile_kwargs.update({'delete':False})
-    return tempfile.NamedTemporaryFile(**tempfile_kwargs)
 
 def update_isin(db, config, ensure_indexes=True):
     resp = requests.get(config.get("asx_isin"))
@@ -233,14 +223,15 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
 def available_stocks(db, config):
     assert config is not None
     # only variants which include ORDINARY FULLY PAID/STAPLED SECURITIES eg. SYD
-    stocks = [re.compile(r".*ORDINARY.*"), 
-              re.compile(r"^EXCHANGE\s+TRADED\s+FUND.*$"), 
-              re.compile(r"\bETF\b"),
-              re.compile(r"^ETFS\b"),
-              re.compile(r"\bETF\s+UNITS\b"),
-              re.compile(r"\sETF$"),
-              re.compile(r"\sFUND$"),
-             ]
+    stocks = [
+        re.compile(r".*ORDINARY.*"),
+        re.compile(r"^EXCHANGE\s+TRADED\s+FUND.*$"),
+        re.compile(r"\bETF\b"),
+        re.compile(r"^ETFS\b"),
+        re.compile(r"\bETF\s+UNITS\b"),
+        re.compile(r"\sETF$"),
+        re.compile(r"\sFUND$"),
+    ]
     ret = set()
     for security_type in stocks:
         tmp = set(
@@ -305,7 +296,13 @@ def update_company_details(db, available_stocks, config, ensure_indexes=False):
 
     if ensure_indexes:
         db.asx_company_details.create_index(
-            [("asx_code", pymongo.ASCENDING,),], unique=True
+            [
+                (
+                    "asx_code",
+                    pymongo.ASCENDING,
+                ),
+            ],
+            unique=True,
         )
 
     utc_now = datetime.now(timezone.utc)
