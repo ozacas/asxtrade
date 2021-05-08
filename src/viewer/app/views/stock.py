@@ -145,14 +145,58 @@ def show_financial_metrics(request, stock=None):
     if data_df is None or len(data_df) < 1:
         raise Http404(f"No financial metrics available for {stock}")
 
-    trending_metrics = calculate_trends(data_df)
-    good_fit_metrics = []
-    for k, t in trending_metrics.items():
+    linear_metrics = calculate_trends(data_df)
+    good_linear_metrics = []
+    for k, t in linear_metrics.items():
         if t[1] < 0.1:
-            good_fit_metrics.append(k)
+            good_linear_metrics.append(k)
+    exp_metrics = calculate_trends(data_df, polynomial_degree=3, nrmse_cutoff=0.1)
+    good_exp_metrics = []
+    for k, t in exp_metrics.items():
+        if t[1] < 0.1:
+            good_exp_metrics.append(k)
     print(
-        f"n_metrics == {len(data_df)} n_trending={len(trending_metrics.keys())} n_good_fit={len(good_fit_metrics)}"
+        f"n_metrics == {len(data_df)} n_trending={len(linear_metrics.keys())} n_good_fit={len(good_linear_metrics)} n_good_exp={len(good_exp_metrics)}"
     )
+
+    def plot_metrics(df: pd.DataFrame):
+        plot = (
+            p9.ggplot(df, p9.aes(x="date", y="value", colour="metric"))
+            + p9.geom_line(size=1.3)
+            + p9.geom_point(size=3)
+            + p9.theme(subplots_adjust={"left": 0.2})
+            + p9.scale_y_continuous(labels=label_shorten)
+            + p9.scale_color_cmap_d()
+            + p9.labs(x="", y="")
+        )
+        return plot
+
+    def linear_trending_metrics():
+        df = data_df.filter(good_linear_metrics, axis=0)
+        if len(df) < 1:
+            return None
+        df["metric"] = df.index
+        df = df.melt(id_vars="metric").dropna(how="any", axis=0)
+        plot = plot_metrics(df)
+        plot += p9.facet_wrap("~metric", ncol=1, scales="free_y")
+        plot += p9.theme(
+            figure_size=(12, int(len(good_linear_metrics) * 1.5)),
+            legend_position="none",
+        )
+        return plot
+
+    def exponential_growth_metrics():
+        df = data_df.filter(good_exp_metrics, axis=0)
+        if len(df) < 1:
+            return None
+        df["metric"] = df.index
+        df = df.melt(id_vars="metric").dropna(how="any", axis=0)
+        plot = plot_metrics(df)
+        plot += p9.facet_wrap("~metric", ncol=1, scales="free_y")
+        plot += p9.theme(
+            figure_size=(12, int(len(good_exp_metrics) * 1.5)), legend_position="none"
+        )
+        return plot
 
     def inner():
         df = data_df.filter(["Ebit", "Total Revenue", "Earnings"], axis=0)
@@ -161,19 +205,17 @@ def show_financial_metrics(request, stock=None):
             return None
         df["metric"] = df.index
         df = df.melt(id_vars="metric").dropna(how="any", axis=0)
-        # print(df)
-        plot = (
-            p9.ggplot(df, p9.aes(x="date", y="value", colour="metric"))
-            + p9.geom_line(size=1.3)
-            + p9.geom_point(size=3)
-            + p9.theme(figure_size=(12, 6), subplots_adjust={"left": 0.2})
-            + p9.scale_y_continuous(labels=label_shorten)
-            + p9.scale_color_cmap_d()
-            + p9.labs(x="", y="")
-        )
+        plot = plot_metrics(df)
+        plot += p9.theme(figure_size=(12, 6))
         return plot
 
     er_uri = cache_plot(f"{stock}-earnings-revenue-plot", inner)
+    trending_metrics_uri = cache_plot(
+        f"{stock}-trending-metrics-plot", linear_trending_metrics
+    )
+    exp_growth_metrics_uri = cache_plot(
+        f"{stock}-exponential-growth-metrics-plot", exponential_growth_metrics
+    )
     warning(
         request,
         "Due to experimental data ingest - data on this page may be wrong/misleading/inaccurate/missing. Use at own risk.",
@@ -182,6 +224,8 @@ def show_financial_metrics(request, stock=None):
         "asx_code": stock,
         "data": data_df,
         "earnings_and_revenue_plot_uri": er_uri,
+        "trending_metrics_plot_uri": trending_metrics_uri,
+        "exp_growth_metrics_plot_uri": exp_growth_metrics_uri,
     }
     return render(request, "stock_financial_metrics.html", context=context)
 

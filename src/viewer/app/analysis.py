@@ -81,7 +81,9 @@ def calculate_trends(
         n = len(series)
         assert n > 0
         # print(n)
-        if n < 4:  # too few data points for a trend? if so, ignore the series
+        if (
+            n < 2 + polynomial_degree
+        ):  # too few data points for a trend? if so, ignore the series
             continue
 
         # timeseries have more than 30 days? if so, compute a short-term trend for the user
