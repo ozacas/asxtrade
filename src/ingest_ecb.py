@@ -16,6 +16,9 @@ do_not_download = set(
         "RTD",  # research database
         "SAFE",  # survey dataset
         "SPF",  # survey dataset
+        "SEC",  # dont have correct pd.read_csv settings for this dataset, load fails
+        "STP",  # ditto
+        "STS",  # ditto
     ]
 )
 
@@ -82,6 +85,28 @@ def save_code_list(
         # FALLTHRU...
 
     return n
+
+
+def save_flow(
+    db_collection, header: sdmx.message.Header, flow_name: str, flow_descr: str
+) -> None:
+    d = {
+        "prepared": header.prepared,
+        "is_test_data": header.test,
+        "source": str(header.source)
+        if header.source is not None
+        else None,  # use str() to ensure mongo string compatibility from SDMX type
+        "sender": str(header.sender),
+        "flow_name": flow_name,
+        "flow_descr": flow_descr,
+        "last_updated": now(),
+    }
+
+    result = db_collection.update_one(
+        {"flow_name": flow_name}, {"$set": d}, upsert=True
+    )
+    assert result is not None
+    assert result.matched_count == 1 or result.upserted_id is not None
 
 
 def save_metadata(db_collection, dsd, flow_name: str) -> int:
@@ -182,6 +207,8 @@ if __name__ == "__main__":
                 current_msg = ecb.dataflow(flow_name)
                 current_flow = current_msg.dataflow[flow_name]
                 dsd = current_flow.structure
+                # print(current_msg.header)
+                save_flow(db.ecb_flow_index, current_msg.header, flow_name, flow_descr)
                 save_metadata(db.ecb_metadata_index, dsd, flow_name)
 
             if url in recent_tags:
@@ -201,11 +228,10 @@ if __name__ == "__main__":
                 )
                 try:
                     df = pd.read_csv(fp, **kwargs)
-                    for col_idx in (7, 27):
-                        print(df[df.columns[col_idx]])
                     save_dataframe(db.ecb_data_cache, {}, df, url, "ECB")
                 except pd.errors.EmptyDataError:  # no data is ignored as far as --fail-fast is concerned
                     print(f"No CSV data to save.. skipping {flow_name}")
+
             time.sleep(a.delay)
         except KeyboardInterrupt:
             exit(1)
