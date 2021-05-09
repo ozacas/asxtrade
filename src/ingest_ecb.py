@@ -18,14 +18,104 @@ do_not_download = set(
         "SPF",  # survey dataset
     ]
 )
+
+# some datasets need a little help to be ingested correctly via pandas, extra options to pd.read_csv() are specified per flow_name
 extra_csv_parms = {
     "SEC": {"dtype": {"SEC_ISSUING_SECTOR": "int"}},
     "STS": {"dtype": {"STS_SUFFIX": "int"}},
     "YC": {"dtype": {"COMPILATION": "unicode"}},
+    "BSI": {
+        "dtype": {
+            "BS_COUNT_SECTOR": "str",
+            "OBS_COM": "str",
+            "UNIT_INDEX_BASE": "str",
+            "COMPILATION": "str",
+        }
+    },
+    "ICP": {
+        "dtype": {
+            "TIME_PERIOD": "str",
+            "SOURCE_AGENCY": "str",
+        }
+    },
 }
 entrypoint = "https://sdw-wsrest.ecb.europa.eu/service/"  # Using protocol 'https'
 resource = "data"  # The resource for data queries is always 'data'
 parameters = {"startPeriod": "2020-01-01", "endPeriod": "2021-05-01"}
+
+
+def save_code_list(
+    db_collection, flow_name: str, cl_name: str, code_list, metadata_type: str
+) -> int:
+    n = 0
+    print(f"save_code_list({flow_name}, {cl_name}, {metadata_type})")
+    assert len(flow_name) > 0
+    assert len(metadata_type) > 0
+    assert len(cl_name) > 0
+    try:
+        df = sdmx.to_pandas(code_list).to_frame()
+        for row in df.itertuples():
+            d = {
+                "flow_name": flow_name,
+                "codelist_name": cl_name,
+                "item_name": row.Index,
+                "item_value": row._1,
+                "metadata_type": metadata_type,
+            }
+            matcher = {
+                "flow_name": flow_name,
+                "codelist_name": cl_name,
+                "item_name": row.Index,
+                "metadata_type": metadata_type,
+            }
+            # print(matcher)
+            result = db_collection.update_one(
+                matcher,
+                {"$set": d},
+                upsert=True,
+            )
+            assert result is not None
+            assert result.matched_count == 1 or result.upserted_id is not None
+            n += 1
+    except NotImplementedError:
+        print(f"WARNING: unable to save_codelist: {cl_name} {flow_name}")
+        # FALLTHRU...
+
+    return n
+
+
+def save_metadata(db_collection, dsd, flow_name: str) -> int:
+    assert db_collection is not None
+    assert dsd is not None
+    assert len(flow_name) > 0
+
+    # 1. save dimension data
+    for dim in dsd.dimensions.components:
+        code_list = dim.local_representation.enumerated
+        save_code_list(
+            db_collection, flow_name, dim.id, code_list, metadata_type="dimension"
+        )
+
+    # 2. save attribute metadata
+    for attr in dsd.attributes.components:
+        result = attr.local_representation.enumerated
+        # print(attr.id)
+        if result is not None:
+            save_code_list(
+                db_collection, flow_name, attr.id, result, metadata_type="attribute"
+            )
+
+    # 3. save observation metadata
+    for obs in dsd.measures.components:
+        result = obs.local_representation.enumerated
+        # print(obs.id)
+        if result is not None:
+            save_code_list(
+                db_collection, flow_name, obs.id, result, metadata_type="measure"
+            )
+
+    return 0
+
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser(
@@ -39,6 +129,11 @@ if __name__ == "__main__":
     )
     args.add_argument("--fail-fast", help="Stop on first error", action="store_true")
     args.add_argument("--all", help="Download all ECB datasets", action="store_true")
+    args.add_argument(
+        "--always-update-metadata",
+        help="Update metadata even if recently processed",
+        action="store_true",
+    )
     args.add_argument(
         "--delay", help="Delay between datasets in seconds [30]", type=int, default=30
     )
@@ -58,8 +153,9 @@ if __name__ == "__main__":
     db = mongo[m.get("db")]
 
     ecb = sdmx.Request("ECB")
-    resp = ecb.dataflow()
-    df = sdmx.to_pandas(resp.dataflow).to_frame()
+    all_flows = ecb.dataflow()
+    df = sdmx.to_pandas(all_flows.dataflow).to_frame()
+
     print(f"Found {len(df)} ECB datasets to process")
 
     if a.dataset:
@@ -80,6 +176,14 @@ if __name__ == "__main__":
                 continue
             key = ""
             url = entrypoint + resource + "/" + flow_name + "/" + key
+
+            if not url in recent_tags or a.always_update_metadata:
+                print(f"Updating metadata for {flow_name}")
+                current_msg = ecb.dataflow(flow_name)
+                current_flow = current_msg.dataflow[flow_name]
+                dsd = current_flow.structure
+                save_metadata(db.ecb_metadata_index, dsd, flow_name)
+
             if url in recent_tags:
                 print(f"Skipping update to {url} since recently processed.")
                 continue
@@ -95,9 +199,13 @@ if __name__ == "__main__":
                     if not flow_name in extra_csv_parms
                     else dict(**extra_csv_parms[flow_name])
                 )
-                df = pd.read_csv(fp, **kwargs)
-                # print(df)
-                save_dataframe(db.ecb_data_cache, {}, df, url, "ECB")
+                try:
+                    df = pd.read_csv(fp, **kwargs)
+                    for col_idx in (7, 27):
+                        print(df[df.columns[col_idx]])
+                    save_dataframe(db.ecb_data_cache, {}, df, url, "ECB")
+                except pd.errors.EmptyDataError:  # no data is ignored as far as --fail-fast is concerned
+                    print(f"No CSV data to save.. skipping {flow_name}")
             time.sleep(a.delay)
         except KeyboardInterrupt:
             exit(1)
