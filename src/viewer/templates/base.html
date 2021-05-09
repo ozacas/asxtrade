@@ -6,7 +6,7 @@
     <title>ASX Viewer</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap-theme.min.css">
-    <link rel="stylesheet" href="{% static " app.css" %}">
+    <link rel="stylesheet" href="{% static 'app.css' %}">
     <script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 
@@ -17,7 +17,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.full.min.js"
         integrity="sha256-FEqEelWI3WouFOo2VWP/uJfs1y8KJ++FLh2Lbqc8SJk=" crossorigin="anonymous"></script>
 
-    <script type="text/javascript" src="{% static " site.js" %}"></script>
+    <script type="text/javascript" src="{% static 'site.js' %}"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
@@ -48,8 +48,8 @@
                     <ul class="nav flex-column">{% menu search %}
                         {% for item in menuitems %}
                         <li class="nav-item">
-                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}" 
-                                {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
+                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"
+                             {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
                         </li>
                         {% endfor %}
                     </ul>
@@ -57,8 +57,8 @@
                     <ul class="nav flex-column">{% menu stats %}
                         {% for item in menuitems %}
                         <li class="nav-item">
-                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"
-                                {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
+                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}" 
+                              {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
                         </li>
                         {% endfor %}
                     </ul>
@@ -67,7 +67,7 @@
                         {% for item in menuitems %}
                         <li class="nav-item">
                             <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}" 
-                                {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
+                               {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
                         </li>
                         {% endfor %}
                     </ul>
