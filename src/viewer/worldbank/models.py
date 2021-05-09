@@ -59,8 +59,8 @@ class WorldBankInvertedIndex(model.Model):
     n_attributes = model.IntegerField()
     last_updated = model.DateTimeField()
     tag = model.TextField()
-    indicator_id = model.TextField() # xref into WorldBankIndicators.wb_id
-    indicator_name = model.TextField() # likewise to name field
+    indicator_id = model.TextField()  # xref into WorldBankIndicators.wb_id
+    indicator_name = model.TextField()  # likewise to name field
 
     objects = DjongoManager()
 
@@ -68,11 +68,13 @@ class WorldBankInvertedIndex(model.Model):
         db_table = "world_bank_inverted_index"
         verbose_name_plural = "World Bank Inverted Indexes"
 
+
 class WorldBankDataCache(model.Model):
-    """ 
+    """
     Similar to, but separate from, app.MarketQuoteCache, this keeps track of pandas dataframes (parquet format) which have
     been downloaded, cleaned and ingested into MongoDB
     """
+
     size_in_bytes = model.IntegerField()
     status = model.TextField()
     tag = model.TextField()
@@ -90,10 +92,11 @@ class WorldBankDataCache(model.Model):
     objects = DjongoManager()
 
     class Meta:
-        db_table = "market_data_cache"
+        db_table = "worldbank_data_cache"
+
 
 class WorldBankIndicators(model.Model):
-    id = ObjectIdField(primary_key=True, db_column='_id')
+    id = ObjectIdField(primary_key=True, db_column="_id")
     wb_id = model.TextField()  # world bank id, not to be confused with django id/pk
     name = model.TextField()
     last_updated = model.DateTimeField(auto_now_add=True)
@@ -103,9 +106,11 @@ class WorldBankIndicators(model.Model):
     topics = ArrayField(WorldBankTopic)
     source_organisation = model.TextField()
     last_successful_data = model.DateTimeField(null=True)
-    last_error_when = model.DateTimeField(null=True) # date of last ingest error for this indicator (or None if not known)
+    last_error_when = model.DateTimeField(
+        null=True
+    )  # date of last ingest error for this indicator (or None if not known)
     last_error_msg = model.TextField()  # eg. Error code 175
-    last_error_type = model.TextField() # eg. class RuntimeError
+    last_error_type = model.TextField()  # eg. class RuntimeError
 
     objects = DjongoManager()
 
@@ -120,7 +125,7 @@ class WorldBankIndicators(model.Model):
         return f"{self.wb_id} {self.name} {self.source} last_error_when={self.last_error_when} last_updated={self.last_updated}"
 
     @property
-    def tag(self): # NB: must match the ingest_worldbank_datasets.py tag name...
+    def tag(self):  # NB: must match the ingest_worldbank_datasets.py tag name...
         return f"{self.wb_id}-yearly-dataframe"
 
     @property
@@ -132,9 +137,8 @@ class WorldBankIndicators(model.Model):
         t = self.tag
         print(f"Fetching parquet dataframe for {t}")
         return get_parquet(t)
-   
+
     class Meta:
         db_table = "world_bank_indicators"
-        verbose_name = 'World Bank Metric'
-        verbose_name_plural = 'World Bank Metrics'
-
+        verbose_name = "World Bank Metric"
+        verbose_name_plural = "World Bank Metrics"

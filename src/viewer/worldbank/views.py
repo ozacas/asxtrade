@@ -3,6 +3,7 @@ Responsible for interaction with worldbank data API and interaction with the use
 """
 import re
 import io
+import traceback
 from collections import defaultdict
 from typing import Iterable
 from django.contrib.auth.decorators import login_required
@@ -419,10 +420,15 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
             n_datasets = 0
             add_points = False
             for i in indicators:
-                df = fetch_data(
-                    i, [country], fill_missing=lambda df: df.resample("AS").asfreq()
-                )
-                if df is None or len(df) == 0:
+                try:
+                    df = fetch_data(
+                        i, [country], fill_missing=lambda df: df.resample("AS").asfreq()
+                    )
+                    if df is None or len(df) == 0:
+                        continue
+                except:  # Data load fail?
+                    print(f"WARNING: unable to load worldbank dataset {i} - ignored")
+                    traceback.print_exc()
                     continue
                 n_datasets += 1
                 df["dataset"] = f"{i.name} ({i.wb_id})"
@@ -450,6 +456,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
                 **kwargs,
             )
             plot += p9.facet_wrap("~dataset", ncol=1, scales="free_y")
+            plot += p9.labs(x="", y="")
             plot += p9.theme(
                 legend_position="none"
             )  # disable legend since each facet has its own title
