@@ -118,7 +118,7 @@ def fetch_dataset(db_collection, flow_name: str, parameters):
 
 def update_flow(db, flow_name: str):
     assert db is not None
-    assert len(flow_name) >= 3
+    assert len(flow_name) >= 2
     tag = f"https://sdw-wsrest.ecb.europa.eu/service/data/{flow_name}/"
 
     data_available = db.ecb_data_cache.find_one({"tag": tag, "scope": "ECB"})
@@ -273,7 +273,7 @@ if __name__ == "__main__":
             if url in recent_tags:
                 print(f"Skipping update to {url} since recently processed.")
             elif a.no_data_fetch:
-                print("Skipping {url} due to --no-data-fetch")
+                print(f"Skipping {url} due to --no-data-fetch")
 
             update_flow(db, flow_name)
             time.sleep(a.delay)
