@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "debug_toolbar",
     "worldbank",
     "abs",
+    "ecb",
 ]
 
 MIDDLEWARE = [
