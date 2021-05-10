@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="row">
+        <h3>Search dataset: {{ dataflow.description }}</h3>
+
+        <form action="{{ action_url }}" method="POST">
+            <table>
+            {% csrf_token %}
+            {{ form.as_table }}
+            <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+            </table>
+        </form>
+    </div>
+
+    {% include 'user-messages.html' %}
+
+    <div class="row">
+        {% if plot_uri is not None %}
+        <img src="/png/{{ plot_uri }}" alt="ECB dataset plot" />
+        {% endif %}
+    </div>
+{% endblock %}

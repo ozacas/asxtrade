@@ -19,6 +19,7 @@ do_not_download = set(
         "SEC",  # dont have correct pd.read_csv settings for this dataset, load fails
         "STP",  # ditto
         "STS",  # ditto
+        "ST1",  # discontinued dataset according to https://sdw.ecb.europa.eu/browseExplanation.do?node=9689721
     ]
 )
 
@@ -87,8 +88,55 @@ def save_code_list(
     return n
 
 
+def fetch_dataset(db_collection, flow_name: str, parameters):
+    # 1. try CSV fetch, if that doesnt work then try PandasSDMX to get the dataframe
+    data_response = requests.get(url, params=parameters, headers={"Accept": "text/csv"})
+    assert data_response.status_code == 200
+    with get_tempfile() as fp:
+        fp.write(data_response.text.encode())
+        fp.seek(0)
+        kwargs = (
+            {}
+            if not flow_name in extra_csv_parms
+            else dict(**extra_csv_parms[flow_name])
+        )
+        try:
+            df = pd.read_csv(fp, **kwargs)
+            save_dataframe(db_collection, {}, df, url, "ECB")
+            return
+        except pd.errors.EmptyDataError:  # no data is ignored as far as --fail-fast is concerned
+            print(f"No CSV data to save.. now trying {flow_name} using pandasdmx")
+            # FALLTHRU...
+
+    # 2. try pandassdmx if CSV fetch fails
+    ecb = sdmx.Request("ECB", backend="memory")
+    data_msg = ecb.data(flow_name, params=parameters)
+    df = sdmx.to_pandas(data_msg)
+    assert isinstance(df, pd.DataFrame)
+    save_dataframe(db_collection, {}, df, url, "ECB")
+
+
+def update_flow(db, flow_name: str):
+    assert db is not None
+    assert len(flow_name) >= 3
+    tag = f"https://sdw-wsrest.ecb.europa.eu/service/data/{flow_name}/"
+
+    data_available = db.ecb_data_cache.find_one({"tag": tag, "scope": "ECB"})
+    print(f"{flow_name} {data_available is None}")
+    result = db.ecb_flow_index.update_one(
+        {"flow_name": flow_name},
+        {"$set": {"data_available": data_available is not None}},
+    )
+    assert isinstance(result, pymongo.results.UpdateResult)
+    assert result.matched_count == 1
+
+
 def save_flow(
-    db_collection, header: sdmx.message.Header, flow_name: str, flow_descr: str
+    db_collection,
+    header: sdmx.message.Header,
+    flow_name: str,
+    flow_descr: str,
+    data_available: bool,
 ) -> None:
     d = {
         "prepared": header.prepared,
@@ -100,6 +148,7 @@ def save_flow(
         "flow_name": flow_name,
         "flow_descr": flow_descr,
         "last_updated": now(),
+        "data_available": data_available,
     }
 
     result = db_collection.update_one(
@@ -155,6 +204,11 @@ if __name__ == "__main__":
     args.add_argument("--fail-fast", help="Stop on first error", action="store_true")
     args.add_argument("--all", help="Download all ECB datasets", action="store_true")
     args.add_argument(
+        "--no-data-fetch",
+        help="Do not fetch data ie. metadata only",
+        action="store_true",
+    )
+    args.add_argument(
         "--always-update-metadata",
         help="Update metadata even if recently processed",
         action="store_true",
@@ -208,35 +262,26 @@ if __name__ == "__main__":
                 current_flow = current_msg.dataflow[flow_name]
                 dsd = current_flow.structure
                 # print(current_msg.header)
-                save_flow(db.ecb_flow_index, current_msg.header, flow_name, flow_descr)
+                save_flow(
+                    db.ecb_flow_index, current_msg.header, flow_name, flow_descr, False
+                )
                 save_metadata(db.ecb_metadata_index, dsd, flow_name)
+
+            if not (a.no_data_fetch or url in recent_tags):
+                fetch_dataset(db.ecb_data_cache, flow_name, parameters)
 
             if url in recent_tags:
                 print(f"Skipping update to {url} since recently processed.")
-                continue
-            data_response = requests.get(
-                url, params=parameters, headers={"Accept": "text/csv"}
-            )
-            assert data_response.status_code == 200
-            with get_tempfile() as fp:
-                fp.write(data_response.text.encode())
-                fp.seek(0)
-                kwargs = (
-                    {}
-                    if not flow_name in extra_csv_parms
-                    else dict(**extra_csv_parms[flow_name])
-                )
-                try:
-                    df = pd.read_csv(fp, **kwargs)
-                    save_dataframe(db.ecb_data_cache, {}, df, url, "ECB")
-                except pd.errors.EmptyDataError:  # no data is ignored as far as --fail-fast is concerned
-                    print(f"No CSV data to save.. skipping {flow_name}")
+            elif a.no_data_fetch:
+                print("Skipping {url} due to --no-data-fetch")
 
+            update_flow(db, flow_name)
             time.sleep(a.delay)
         except KeyboardInterrupt:
             exit(1)
         except Exception:
             print(f"WARNING: failed to download {flow_name}")
+            update_flow(db, flow_name)
             traceback.print_exc()
             if a.fail_fast:
                 raise
