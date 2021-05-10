@@ -2,4 +2,5 @@ from django.apps import AppConfig
 
 
 class WorldbankConfig(AppConfig):
-    name = 'worldbank'
+    name = "worldbank"
+    verbose_name = "World Bank"
