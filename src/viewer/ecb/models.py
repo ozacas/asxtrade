@@ -52,6 +52,7 @@ class ECBFlow(models.Model):
     prepared = models.DateTimeField()
     sender = models.TextField()
     source = models.TextField()
+    data_available = models.BooleanField()
 
     objects = DjongoManager()
 

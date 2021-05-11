@@ -17,7 +17,12 @@ def ecb_index_view(request):
     validate_user(request.user)
     context = {
         "dataflows": sorted(
-            [flow for flow in ECBFlow.objects.filter(is_test_data=False)],
+            [
+                flow
+                for flow in ECBFlow.objects.filter(is_test_data=False).filter(
+                    data_available=True
+                )
+            ],
             key=lambda f: f.description,
         )
     }
@@ -52,39 +57,52 @@ class ECBDataflowView(LoginRequiredMixin, FormView):
         return form_class(self.data_flow, **kwargs)
 
     def form_valid(self, form):
-        print("in form_valid")
-        print(form.cleaned_data)
-
         df = fetch_dataframe(self.data_flow.name)
         if df is None or len(df) == 0:
             raise Http404(f"Unable to load dataframe: {self.data_flow}")
 
+        filter_performance = []
         for k, v in form.cleaned_data.items():
+            rows_at_start = len(df)
+            print(f"Filtering rows for {k}: total {rows_at_start} rows at start")
             k = k[len("dimension_") :]
+            if rows_at_start < 10000:
+                unique_values_left = df[k].unique()
+            else:
+                unique_values_left = set()
             df = df[df[k] == v]
+            rows_at_end = len(df)
+
+            filter_performance.append(
+                (k, v, rows_at_start, rows_at_end, unique_values_left)
+            )
+            print(f"After filtering: now {rows_at_end} rows")
             if len(df) == 0:
                 warning(self.request, f"No rows of data left after filtering: {k} {v}")
                 break
 
         plot = None
+        plot_title = ""
         if len(df) > 0:
-            title, x_axis_column, y_axis_column, df = detect_dataframe(
+            plot_title, x_axis_column, y_axis_column, df = detect_dataframe(
                 df, self.data_flow
             )
             plot = (
                 p9.ggplot(df, p9.aes(x=x_axis_column, y=y_axis_column))
                 + p9.geom_point()
                 + p9.geom_line()
-                + p9.labs(title=title, x="", y="")
+                + p9.labs(title="", x="", y="")
                 + p9.theme(figure_size=(12, 6))
             )
 
         context = self.get_context_data()
-        cache_key = "-".join(sorted(form.cleaned_data.values()))
+        cache_key = "-".join(sorted(form.cleaned_data.values())) + "-ecb-plot"
         context.update(
             {
                 "dataflow": self.data_flow,
                 "dataflow_name": self.data_flow.name,
+                "filter_performance": filter_performance,
+                "plot_title": plot_title,
                 "plot_uri": cache_plot(cache_key, lambda: plot),
             }
         )

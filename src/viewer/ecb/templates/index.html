@@ -6,9 +6,7 @@
 
     <table>
     {% for item in dataflows %}
-        {% if item.data_available %}
             <tr><td class="padded"><a href="/ecb/dataflow/{{ item.name }}">{{ item.description }}</a></td></tr>
-        {% endif %}
     {% endfor %}
     </table>
     
