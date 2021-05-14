@@ -168,11 +168,12 @@ ABS provides several different APIs:
  - Indicator API (headline financial/economic indicators eg. employment, CPI etc.)
  - free API using [pandasdmx](https://pandasdmx.readthedocs.io/en/v1.0/): census data and other datasets accessible online also
 
-ingest_api.py supports both by ingesting the data into MongoDB first. The indicator API data is only available if you request
+ingest_abs.py supports both by ingesting the data into MongoDB first. The indicator API data is only available if you request
 an API key and use it when invoking ingest_abs.py using --api-key:
 
 ~~~~
   python3 ingest_abs.py --help
 ~~~~
 
-Some of the datasets can consume more than 8GB of memory during download so a 16GB machine is recommended for ingestion.
+Some of the datasets can consume more than 8GB of memory during download so a 16GB machine is recommended for ingestion. Alternatively reduce
+the startPeriod to reduce the amount of historical data fetched.
