@@ -164,4 +164,14 @@ You can also use this program to fill gaps - as yfinance supports up to five yea
 
 ### Macroeconomic datasets: Australian Bureau of Statistics (experimental)
 
-TODO FIXME... still waiting for an API key from the government.
+ABS provides several different APIs:
+ - Indicator API (headline financial/economic indicators eg. employment, CPI etc.)
+ - free API using [pandasdmx](https://pandasdmx.readthedocs.io/en/v1.0/): census data and other datasets accessible online also
+
+ingest_api.py supports both by ingesting the data into MongoDB first. The indicator API data is only available if you request
+an API key and use it when invoking ingest_abs.py using --api-key:
+
+~~~~
+  python3 ingest_abs.py --help
+~~~~
+

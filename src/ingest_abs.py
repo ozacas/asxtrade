@@ -12,6 +12,8 @@ import time
 from requests.exceptions import HTTPError
 from utils import save_dataframe, read_config, now
 
+do_not_download = set(["ABS_BLDG_APPROVALS"])
+
 
 def get_known_dataset_ids() -> Iterable[str]:
     resp = requests.get("http://stat.data.abs.gov.au/sdmx-json/")
@@ -49,7 +51,10 @@ if __name__ == "__main__":
         "--delay", help="Pause X seconds between requests [30]", type=int, default=30
     )
     args.add_argument(
-        "--api-key", help="API Key to use to fetch ABS indicator API data", type=str, default=None)
+        "--api-key",
+        help="API Key to use to fetch ABS indicator API data",
+        type=str,
+        default=None,
     )
     a = args.parse_args()
     config, password = read_config(a.config)
@@ -67,11 +72,14 @@ if __name__ == "__main__":
         ]
     )
 
-    for dataset, title in known_datasets:
+    for dataset, title in filter(
+        lambda t: t[0] not in do_not_download and t[0] not in recent_data_sets,
+        known_datasets,
+    ):
         print(f"Processing dataset: {dataset} {title}")
         try:
             data_response = ABS.data(
-                resource_id=dataset, params={"startPeriod": "1990"}
+                resource_id=dataset, params={"startPeriod": "2010"}
             )
             df = data_response.write().unstack().reset_index()
             assert len(df) > 0 and isinstance(df, pd.DataFrame)
