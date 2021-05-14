@@ -175,3 +175,4 @@ an API key and use it when invoking ingest_abs.py using --api-key:
   python3 ingest_abs.py --help
 ~~~~
 
+Some of the datasets can consume more than 8GB of memory during download so a 16GB machine is recommended for ingestion.
