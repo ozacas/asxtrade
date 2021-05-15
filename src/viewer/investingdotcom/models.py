@@ -77,3 +77,34 @@ def get_commodity_prices(
         return prices_df
     except (ValueError, ConnectionError, IOError) as e:
         raise Http404(f"Unable to fetch commodity prices: {str(e)}")
+
+
+def get_bond_countries(as_choices=False) -> list:
+    try:
+        countries = ip.bonds.get_bond_countries()
+        if as_choices:
+            return [(i, i) for i in countries]
+        else:
+            return countries
+    except (ValueError, ConnectionError, IOError) as e:
+        raise Http404(f"Unable to fetch list of country bonds: {str(e)}")
+
+
+def get_bonds_for_country(country_name: str) -> pd.DataFrame:
+    try:
+        available_bonds = ip.bonds.get_bonds(country=country_name)
+        return available_bonds
+    except (ValueError, ConnectionError, IOError) as e:
+        raise Http404(f"Unable to fetch bonds for {country_name}: {str(e)}")
+
+
+def get_bond_prices(bond_name: str, timeframe: Timeframe) -> pd.DataFrame:
+    try:
+        df = ip.bonds.get_bond_historical_data(
+            bond_name,
+            investpy_date(timeframe.earliest_date),
+            investpy_date(timeframe.most_recent_date),
+        )
+        return df
+    except (ValueError, ConnectionError, IOError) as e:
+        raise Http404(f"Unable to fetch bond prices for {bond_name}: {str(e)}")

@@ -1,0 +1,33 @@
+{% extends "resource_page.html" %}
+
+{% block content %}
+<script>
+function investingdotcom_ajax_bond_complete() {
+   var url = $("#BondForm").attr("country-bonds-autocomplete");  
+   var cntry = $("#id_bond_country").val();
+  
+   $.ajax({
+      type: "GET",
+      url: url +"?country="+cntry,
+      success: function (data) {   
+         $("#id_bond_name").html(data);  
+      },
+      error: function(xhr) {
+           alert("Unable to load available bonds: "+xhr.statusText);
+      }
+   });
+}
+
+$('#id_bond_country').on('change', investingdotcom_ajax_bond_complete)
+$(document).ready(investingdotcom_ajax_bond_complete)
+</script>
+
+
+{% if plot_uri is not None %}
+<div class="row">
+    <h3>{{ plot_title }}</h3>
+
+    <img src="{{ plot_uri }}" alt="plot for selected form values" />
+</div>
+{% endif %}
+{% endblock %}

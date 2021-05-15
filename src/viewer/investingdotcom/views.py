@@ -1,10 +1,17 @@
 from re import S
 from django.shortcuts import render
-from investingdotcom.forms import CryptoForm, CommodityForm
-from investingdotcom.models import get_crypto_prices, get_commodity_prices
-from app.models import Timeframe
+from investingdotcom.forms import CryptoForm, CommodityForm, BondForm
+from investingdotcom.models import (
+    get_bond_countries,
+    get_bonds_for_country,
+    get_crypto_prices,
+    get_commodity_prices,
+    get_bond_prices,
+)
+from app.models import Timeframe, validate_user
 from app.data import cache_plot
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 from django.views.generic.edit import FormView
 import plotnine as p9
 import pandas as pd
@@ -13,16 +20,23 @@ import pandas as pd
 class CryptoFormView(LoginRequiredMixin, FormView):
     form_class = CryptoForm
     template_name = "resource_page.html"
+    value_vars = ("Close", "Volume", "Range")
 
     def make_plot(self, df: pd.DataFrame, timeframe: Timeframe) -> p9.ggplot:
-        df["Range"] = df["High"] - df["Low"]
+        # print(df)
+        col_names = set(df.columns)
+        if "High" in col_names and "Low" in col_names:
+            df["Range"] = df["High"] - df["Low"]
         df["Date"] = pd.to_datetime(df.index, format="%Y-%m-%d")
         melted_df = df.melt(
-            value_vars=("Close", "Volume", "Range"), id_vars="Date", value_name="value"
+            value_vars=self.value_vars, id_vars="Date", value_name="value"
         )
         # print(melted_df)
         plot = (
-            p9.ggplot(melted_df, p9.aes(x="Date", y="value", group="variable"))
+            p9.ggplot(
+                melted_df,
+                p9.aes(x="Date", y="value", group="variable", color="variable"),
+            )
             + p9.geom_line(size=1.3)
             + p9.facet_wrap(
                 "~variable",
@@ -32,6 +46,7 @@ class CryptoFormView(LoginRequiredMixin, FormView):
             )
             + p9.theme(figure_size=(12, 6))
             + p9.scale_color_cmap_d()
+            + p9.labs(x="", y="")
         )
         return plot
 
@@ -71,3 +86,50 @@ class CommodityFormView(CryptoFormView):
             "plot_uri": "/png/" + plot_uri,
             "plot_title": f"Commodity prices: {commodity_str} over {timeframe.description}",
         }
+
+
+class BondFormView(CryptoFormView):
+    form_class = BondForm
+    template_name = "bond_page.html"
+    value_vars = ("Close", "Range")
+
+    def get_form(self, form_class=None):
+        if form_class is None:
+            form_class = self.get_form_class()
+        countries = get_bond_countries()
+        kwargs = self.get_form_kwargs()
+        return form_class(countries, **kwargs)
+
+    def process_form(self, cleaned_data):
+        timeframe = Timeframe(past_n_days=cleaned_data.get("timeframe", 180))
+        bond = cleaned_data.get("bond_name", None)
+        df = get_bond_prices(bond, timeframe)
+        plot_uri = cache_plot(
+            f"{bond}-{timeframe.description}",
+            lambda: self.make_plot(df, timeframe),
+        )
+        return {
+            "plot_uri": "/png/" + plot_uri,
+            "plot_title": f"Bond prices: {bond} over {timeframe.description}",
+        }
+
+
+@login_required
+def ajax_country_bond_autocomplete(request):
+    validate_user(request.user)
+    assert request.method == "GET"
+    country = request.GET.get("country", None)
+
+    bonds = get_bonds_for_country(country)
+    assert isinstance(bonds, pd.DataFrame)
+    hits = []
+    # print(bonds)
+    for i, s in bonds.iterrows():
+        assert s["country"] == country
+        hits.append({"id": s["name"], "name": s["full_name"]})
+
+    return render(
+        request,
+        "country_bond_autocomplete_hits.html",
+        context={"hits": hits, "current_id": country},
+    )

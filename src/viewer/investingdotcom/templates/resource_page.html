@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block searchform %}
-    <form action="{{ action_url }}" method="POST">
+    <form action="{{ action_url }}" method="POST" id="BondForm" country-bonds-autocomplete="{% url 'country-bonds-autocomplete' %}">
     <table>
        {% csrf_token %}
        {{ form.as_table }}
