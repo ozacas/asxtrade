@@ -61,6 +61,7 @@ class CryptoFormView(LoginRequiredMixin, FormView):
         )
 
         return {
+            "title": "Visualize cryptocurrency prices over time",
             "plot_uri": "/png/" + plot_uri,
             "plot_title": f"{crypto_symbol} over {timeframe.description}",
         }
@@ -83,6 +84,7 @@ class CommodityFormView(CryptoFormView):
             lambda: self.make_plot(df, timeframe),
         )
         return {
+            "title": "Visualize commodity prices over time",
             "plot_uri": "/png/" + plot_uri,
             "plot_title": f"Commodity prices: {commodity_str} over {timeframe.description}",
         }
@@ -109,6 +111,7 @@ class BondFormView(CryptoFormView):
             lambda: self.make_plot(df, timeframe),
         )
         return {
+            "title": "Visualise bond yields by country",
             "plot_uri": "/png/" + plot_uri,
             "plot_title": f"Bond prices: {bond} over {timeframe.description}",
         }
