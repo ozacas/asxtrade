@@ -6,6 +6,7 @@ django-autocomplete-light
 django-debug-toolbar
 djongo == 1.3.4
 fastparquet
+investpy
 matplotlib
 numpy
 pandas >= 1.1.0
