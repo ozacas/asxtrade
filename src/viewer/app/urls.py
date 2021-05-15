@@ -83,6 +83,7 @@ urlpatterns = [
     path("worldbank/", include("worldbank.urls")),
     path("abs/", include("abs.urls")),
     path("ecb/", include("ecb.urls")),
+    path("external/investing.com/", include("investingdotcom.urls")),
 ]
 
 

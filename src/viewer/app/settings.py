@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "worldbank",
     "abs",
     "ecb",
+    "investingdotcom",
 ]
 
 MIDDLEWARE = [
