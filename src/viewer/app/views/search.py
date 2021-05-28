@@ -45,7 +45,7 @@ class DividendYieldSearch(
     form_class = DividendSearchForm
     template_name = "search_form.html"  # generic template, not specific to this view
     action_url = "/search/by-yield"
-    ordering = ("-annual_dividend_yield",)
+    ordering = ("asx_code") # default order must correspond to default JS code in template
     timeframe = Timeframe(past_n_days=30)
     qs = None
 

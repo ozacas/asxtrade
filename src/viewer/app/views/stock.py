@@ -33,6 +33,7 @@ from app.plots import (
     plot_fundamentals,
     plot_momentum,
     plot_trend,
+    plot_price_trend,
     plot_company_rank,
     cached_portfolio_performance,
     cached_sector_performance,
@@ -239,6 +240,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
     validate_user(request.user)
     plot_timeframe = Timeframe(past_n_days=n_days)  # for template
 
+    @timing
     def data_factory():
         timeframe = Timeframe(
             past_n_days=n_days + 200

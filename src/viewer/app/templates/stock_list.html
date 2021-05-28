@@ -24,7 +24,11 @@
             $('#sort_by').val(default_to_set)
         }
         var urlParams = new URLSearchParams(window.location.search);
-        set_selected(urlParams.get('sort_by'))
+        var sort_value = urlParams.get('sort_by')
+        if (sort_value == null) { 
+            sort_value = "asx_code"
+        }
+        set_selected(sort_value)
     </script>
     
     <div class="row mt-2">
