@@ -924,25 +924,34 @@ def company_prices(
         )
     )
 
-    def prepare_dataframe(df, iterable_of_fields):
+    def prepare_dataframe(
+        df: pd.DataFrame, iterable_of_fields, unpivotable: bool = False
+    ) -> pd.DataFrame:
         assert isinstance(df, pd.DataFrame)
         is_ok_field = df["field_name"].isin(iterable_of_fields)
         df = df[is_ok_field]
-        return df.pivot(index="fetch_date", columns="field_name", values="field_value")
+        return (
+            df
+            if unpivotable
+            else df.pivot(
+                index="fetch_date", columns="field_name", values="field_value"
+            )
+        )
 
     if not isinstance(fields, str):  # assume iterable if not str...
-        assert len(stock_codes) == 1
         tags = get_required_tags(timeframe.all_dates(), "uber")
         result_df = make_superdf(tags, stock_codes)
-        result_df = prepare_dataframe(result_df, fields)
+        unpivotable = len(fields) > 1 and (stock_codes == None or len(stock_codes) > 1)
+        result_df = prepare_dataframe(result_df, fields, unpivotable=unpivotable)
 
-        assert set(result_df.columns) == set(fields) or len(result_df) == 0
-        # reject dates (ie. rows) which are all NA to avoid downstream problems eg. plotting stocks
-        # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
-        result_df = result_df.dropna(how="all")
-        if transpose:
-            return result_df.transpose()
-        return result_df
+        if unpivotable:
+            pass
+        else:
+            assert set(result_df.columns) == set(fields) or len(result_df) == 0
+            # reject dates (ie. rows) which are all NA to avoid downstream problems eg. plotting stocks
+            # NB: we ONLY do this for the multi-field case, single field it is callers responsibility
+            result_df = result_df.dropna(how="all")
+        return result_df if not transpose else result_df.transpose()
 
     # print(stock_codes)
     assert isinstance(fields, str)

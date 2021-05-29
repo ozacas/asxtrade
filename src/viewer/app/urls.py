@@ -30,15 +30,15 @@ urlpatterns = [
     path("search/by-metric", financial_metric_search),
     path("search/movers", mover_search),
     path("search/market-cap", market_cap_search),
-    path(
-        "show/increasing-eps", show_increasing_eps_stocks
-    ),  # NB: order important here!
+    path("show/increasing-eps", show_increasing_eps_stocks),
+    # NB: order important here!
     path("show/increasing-yield", show_increasing_yield_stocks),
     path("show/trends", show_trends),
     path("show/purchase-performance", show_purchase_performance),
     path("show/watched", show_watched, name="show-watched"),
     path("show/etfs", show_etfs, name="show-etfs"),
     path("show/pe-trends", show_pe_trends, name="show-pe-trends"),
+    path("show/total-earnings", show_total_earnings, name="show-total-earnings"),
     path(
         "show/recent_sector_performance",
         show_recent_sector,

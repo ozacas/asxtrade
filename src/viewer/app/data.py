@@ -11,6 +11,7 @@ from typing import Iterable
 import math
 import numpy as np
 import pandas as pd
+from cachetools import func
 from app.models import (
     companies_with_same_sector,
     day_low_high,
@@ -119,6 +120,7 @@ def label_shorten(labels: Iterable[float]) -> Iterable[str]:
     For large numbers we report them removing all the zeros and replacing with billions/millions/trillions as appropriate.
     This is only done if all labels in the plot end with zeros and all are sufficiently long to have enough zeros. Otherwise labels are untouched.
     """
+    # print(labels)
     str_labels = []
     non_zero_labels = []
     for v in labels:
@@ -413,3 +415,41 @@ def price_change_bins() -> tuple:
     ]
     labels = ["{}".format(b) for b in bins[1:]]
     return (bins, labels)
+
+
+@func.lru_cache(maxsize=1)
+def pe_trends_df(timeframe: Timeframe) -> tuple:
+    # we fetch all required fields for this view in one call to company_prices() - more efficient on DB
+    df = company_prices(
+        None, timeframe, fields=["pe", "eps", "number_of_shares"], missing_cb=None
+    )
+    n_stocks = df["asx_code"].nunique()
+    # NB: cant pivot this df since it has multiple fields for a given stock
+    return df, n_stocks
+
+
+def make_pe_trends_eps_df(
+    df: pd.DataFrame, stocks_with_sector: pd.DataFrame = None
+) -> pd.DataFrame:
+    eps_df = df[df["field_name"] == "eps"].pivot(
+        index="asx_code", columns="fetch_date", values="field_value"
+    )
+    if stocks_with_sector is not None:
+        eps_df = eps_df.merge(stocks_with_sector, left_index=True, right_on="asx_code")
+    return eps_df
+
+
+def make_pe_trends_positive_pe_df(
+    df: pd.DataFrame, stocks_with_sector: pd.DataFrame
+) -> tuple:
+    pe_df = df[df["field_name"] == "pe"].pivot(
+        index="asx_code", columns="fetch_date", values="field_value"
+    )
+    positive_pe_stocks = set(pe_df[pe_df.mean(axis=1) > 0].index)
+    # print(positive_pe_stocks)
+    pe_pos_df = pe_df.filter(items=positive_pe_stocks, axis=0).merge(
+        stocks_with_sector, left_index=True, right_on="asx_code"
+    )
+    pe_pos_df = pe_pos_df.set_index("asx_code", drop=True)
+
+    return pe_pos_df, positive_pe_stocks

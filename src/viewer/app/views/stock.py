@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.http import Http404
 from app.models import (
+    stocks_by_sector,
     validate_stock,
     validate_user,
     stock_info,
@@ -26,7 +27,7 @@ from app.analysis import (
     calculate_trends,
 )
 from app.messages import warning
-from app.data import cache_plot, make_point_score_dataframe, label_shorten
+from app.data import cache_plot, make_point_score_dataframe, label_shorten, pe_trends_df
 from app.plots import (
     plot_point_scores,
     plot_points_by_rule,
@@ -39,6 +40,7 @@ from app.plots import (
     cached_sector_performance,
     cached_company_versus_sector,
 )
+from plotnine.guides.guide_colorbar import guide_colorbar
 
 
 @timing
@@ -341,3 +343,65 @@ def show_purchase_performance(request):
         "contributors_uri": contributors_uri,
     }
     return render(request, "portfolio_trends.html", context=context)
+
+
+@login_required
+def show_total_earnings(request):
+    validate_user(request.user)
+    timeframe = Timeframe(past_n_days=180)
+
+    def data_factory(timeframe: Timeframe) -> pd.DataFrame:
+        df, n_stocks = pe_trends_df(timeframe)
+        df = df.pivot(
+            index=["asx_code", "fetch_date"], columns="field_name", values="field_value"
+        )
+        df = df[df["number_of_shares"] > 0]  # ignore stocks which have unknown shares
+        # print(df)
+        df["total_earnings"] = df["eps"] * df["number_of_shares"]
+        df = df.dropna(how="any", axis=0)
+        # df = df[df["total_earnings"] > 0]  # ignore stocks burning cash
+        df = df.reset_index()
+        df = df.pivot(index="asx_code", columns="fetch_date", values="total_earnings")
+        df = df.merge(stocks_by_sector(), left_index=True, right_on="asx_code")
+        df = df.set_index("asx_code", drop=True)
+        df = df.groupby("sector_name").sum()
+        df["sector_name"] = df.index
+        df = df.melt(id_vars="sector_name", var_name="fetch_date")
+        assert set(df.columns) == set(["sector_name", "fetch_date", "value"])
+        df["fetch_date"] = pd.to_datetime(df["fetch_date"])
+        return df
+
+    def plot(df: pd.DataFrame) -> p9.ggplot:
+        plot = (
+            p9.ggplot(
+                df,
+                p9.aes(
+                    x="fetch_date", y="value", color="sector_name", group="sector_name"
+                ),
+            )
+            + p9.geom_line(size=1.2)
+            + p9.labs(
+                x="", y="Total sector earnings ($AUD, positive contributions only)"
+            )
+            + p9.facet_wrap("~sector_name", ncol=2, scales="free_y")
+            + p9.scale_color_cmap_d()
+            + p9.theme(
+                figure_size=(12, 14),
+                legend_position="none",
+                subplots_adjust={"wspace": 0.25},
+                axis_text_x=p9.element_text(size=7, rotation=30),
+                axis_text_y=p9.element_text(size=7),
+            )
+            + p9.scale_y_continuous(labels=label_shorten)
+        )
+        return plot
+
+    context = {
+        "title": "Earnings per sector over time",
+        "timeframe": timeframe,
+        "plot_uri": cache_plot(
+            f"total-earnings-by-sector:{timeframe.description}",
+            lambda: plot(data_factory(timeframe)),
+        ),
+    }
+    return render(request, "total_earnings_by_sector.html", context=context)

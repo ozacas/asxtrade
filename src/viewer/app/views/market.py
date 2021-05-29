@@ -3,13 +3,16 @@ Responsible for handling requests for pages from the website and delegating the 
 and visualisation as required.
 """
 from collections import defaultdict
+from operator import pos
 from typing import Iterable
 from numpy import isnan
 import pandas as pd
+from cachetools import func
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from app.messages import warning
 from app.models import (
+    timing,
     user_watchlist,
     cached_all_stocks_cip,
     valid_quotes_only,
@@ -19,7 +22,12 @@ from app.models import (
     validate_user,
     stocks_by_sector,
 )
-from app.data import cache_plot
+from app.data import (
+    cache_plot,
+    make_pe_trends_eps_df,
+    make_pe_trends_positive_pe_df,
+    pe_trends_df,
+)
 from app.plots import (
     cached_heatmap,
     plot_series,
@@ -135,88 +143,90 @@ def show_pe_trends(request):
     """
     validate_user(request.user)
     timeframe = Timeframe(past_n_days=180)
-    pe_df = company_prices(
-        None, timeframe, fields="pe", missing_cb=None, transpose=True
-    )
-    eps_df = company_prices(
-        None, timeframe, fields="eps", missing_cb=None, transpose=True
-    )
     ss = stocks_by_sector()
-    ss_dict = {row.asx_code: row.sector_name for row in ss.itertuples()}
-    # print(ss_dict)
-    eps_stocks = set(eps_df.index)
-    n_stocks = len(pe_df)
-    positive_pe_stocks = set(pe_df[pe_df.sum(axis=1) > 0.0].index)
-    asx_codes = set(pe_df.index)
-    n_non_zero_sum = len(positive_pe_stocks)
-    # print(exclude_zero_sum)
-    records = []
-    trading_dates = set(pe_df.columns)
 
-    sector_counts_all_stocks = ss["sector_name"].value_counts()
-    all_sectors = set(ss["sector_name"].unique())
-    pe_pos_df = pe_df.filter(items=positive_pe_stocks, axis=0).merge(
-        ss, left_index=True, right_on="asx_code"
-    )
-    assert len(pe_pos_df) <= len(positive_pe_stocks) and len(pe_pos_df) > 0
-    market_avg_pe_df = pe_pos_df.mean(axis=0).to_frame(
-        name="market_pe"
-    )  # avg P/E by date series
-    market_avg_pe_df["date"] = pd.to_datetime(market_avg_pe_df.index)
-    # print(market_avg_pe_df)
-    breakdown_by_sector_pe_pos_stocks_only = pe_pos_df["sector_name"].value_counts()
-    # print(breakdown_by_sector_pe_pos_stocks_only)
-    sector_counts_pe_pos_stocks_only = {
-        s[0]: s[1] for s in breakdown_by_sector_pe_pos_stocks_only.items()
-    }
-    # print(sector_counts_pe_pos_stocks_only)
-    # print(sector_counts_all_stocks)
-    # print(sector_counts_pe_pos_stocks_only)
-    for ymd in filter(
-        lambda d: d in trading_dates, timeframe.all_dates()
-    ):  # needed to avoid KeyError raised during DataFrame.at[] calls below
-        sum_pe_per_sector = defaultdict(float)
-        sum_eps_per_sector = defaultdict(float)
+    def make_pe_trends_market_avg_df() -> pd.DataFrame:
+        df, _ = pe_trends_df(timeframe)
+        pe_pos_df, _ = make_pe_trends_positive_pe_df(df, ss)
+        market_avg_pe_df = pe_pos_df.mean(axis=0).to_frame(
+            name="market_pe"
+        )  # avg P/E by date series
+        market_avg_pe_df["date"] = pd.to_datetime(market_avg_pe_df.index)
+        return market_avg_pe_df
 
-        for stock in filter(lambda code: code in ss_dict, asx_codes):
-            sector = ss_dict[stock]
-            assert isinstance(sector, str)
+    @func.lru_cache(maxsize=1)
+    def sector_eps_data_factory(timeframe: Timeframe) -> pd.DataFrame:
+        df, n_stocks = pe_trends_df(timeframe)
+        pe_df, positive_pe_stocks = make_pe_trends_positive_pe_df(df, ss)
+        eps_df = make_pe_trends_eps_df(df)
+        # print(positive_pe_stocks)
+        eps_stocks = set(eps_df.index)
+        ss_dict = {row.asx_code: row.sector_name for row in ss.itertuples()}
+        # print(ss_dict)
 
-            if stock in eps_stocks:
-                eps = eps_df.at[stock, ymd]
-                if isnan(eps):
-                    continue
-                sum_eps_per_sector[sector] += eps
+        trading_dates = set(pe_df.columns)
+        trading_dates.remove("sector_name")
+        sector_counts_all_stocks = ss["sector_name"].value_counts()
+        all_sectors = set(ss["sector_name"].unique())
+        breakdown_by_sector_pe_pos_stocks_only = pe_df["sector_name"].value_counts()
+        # print(breakdown_by_sector_pe_pos_stocks_only)
+        sector_counts_pe_pos_stocks_only = {
+            s[0]: s[1] for s in breakdown_by_sector_pe_pos_stocks_only.items()
+        }
+        # print(sector_counts_pe_pos_stocks_only)
+        # print(sector_counts_all_stocks)
+        # print(sector_counts_pe_pos_stocks_only)
+        records = []
+        for ymd in filter(
+            lambda d: d in trading_dates, timeframe.all_dates()
+        ):  # needed to avoid KeyError raised during DataFrame.at[] calls below
+            sum_pe_per_sector = defaultdict(float)
+            sum_eps_per_sector = defaultdict(float)
 
-            if stock in positive_pe_stocks:
-                pe = pe_df.at[stock, ymd]
-                if isnan(pe):
-                    continue
-                assert pe >= 0.0
-                sum_pe_per_sector[sector] += pe
+            for stock in filter(lambda code: code in ss_dict, positive_pe_stocks):
+                sector = ss_dict[stock]
+                assert isinstance(sector, str)
 
-        # print(sum_pe_per_sector)
-        assert len(sector_counts_pe_pos_stocks_only) == len(sum_pe_per_sector)
-        assert len(sector_counts_all_stocks) == len(sum_eps_per_sector)
-        for sector in all_sectors:
-            pe_sum = sum_pe_per_sector.get(sector, None)
-            n_pe = sector_counts_pe_pos_stocks_only.get(sector, None)
-            pe_mean = pe_sum / n_pe if pe_sum is not None else None
-            eps_sum = sum_eps_per_sector.get(sector, None)
+                if stock in eps_stocks:
+                    eps = eps_df.at[stock, ymd]
+                    if isnan(eps):
+                        continue
+                    sum_eps_per_sector[sector] += eps
 
-            records.append(
-                {
-                    "date": ymd,
-                    "sector": sector,
-                    "mean_pe": pe_mean,
-                    "sum_pe": pe_sum,
-                    "sum_eps": eps_sum,
-                    "n_stocks": n_stocks,
-                    "n_sector_stocks_pe_only": n_pe,
-                }
-            )
+                if stock in positive_pe_stocks:
+                    pe = pe_df.at[stock, ymd]
+                    if isnan(pe):
+                        continue
+                    assert pe >= 0.0
+                    sum_pe_per_sector[sector] += pe
 
-    df = pd.DataFrame.from_records(records)
+            # print(sum_pe_per_sector)
+            assert len(sector_counts_pe_pos_stocks_only) == len(sum_pe_per_sector)
+            assert len(sector_counts_all_stocks) == len(sum_eps_per_sector)
+            for sector in all_sectors:
+                pe_sum = sum_pe_per_sector.get(sector, None)
+                n_pe = sector_counts_pe_pos_stocks_only.get(sector, None)
+                pe_mean = pe_sum / n_pe if pe_sum is not None else None
+                eps_sum = sum_eps_per_sector.get(sector, None)
+
+                records.append(
+                    {
+                        "date": ymd,
+                        "sector": sector,
+                        "mean_pe": pe_mean,
+                        "sum_pe": pe_sum,
+                        "sum_eps": eps_sum,
+                        "n_stocks": n_stocks,
+                        "n_sector_stocks_pe_only": n_pe,
+                    }
+                )
+        df = pd.DataFrame.from_records(records)
+        # print(df[df["sector"] == 'Utilities'])
+        # print(df)
+        return df
+
+    df, n_stocks = pe_trends_df(timeframe)
+
     # these arent per-user plots: they can safely be shared across all users of the site, so the key reflects that
     sector_pe_cache_key = f"{timeframe.description}-by-sector-pe-plot"
     sector_eps_cache_key = f"{timeframe.description}-by-sector-eps-plot"
@@ -224,7 +234,7 @@ def show_pe_trends(request):
     market_pe_plot_uri = cache_plot(
         market_pe_cache_key,
         lambda: plot_series(
-            market_avg_pe_df,
+            make_pe_trends_market_avg_df(),
             x="date",
             y="market_pe",
             y_axis_label="Market-wide mean P/E",
@@ -232,23 +242,30 @@ def show_pe_trends(request):
             use_smooth_line=True,
         ),
     )
-    # print(df[df["sector"] == 'Utilities'])
-    # print(df)
+
+    _, positive_pe_stocks = make_pe_trends_positive_pe_df(df, ss)
+
     context = {
         "title": "PE Trends: {}".format(timeframe.description),
         "n_stocks": n_stocks,
         "timeframe": timeframe,
-        "n_stocks_with_pe": n_non_zero_sum,
+        "n_stocks_with_pe": len(positive_pe_stocks),
         "sector_pe_plot_uri": cache_plot(
-            sector_pe_cache_key, lambda: plot_sector_field(df, field="mean_pe")
+            sector_pe_cache_key,
+            lambda: plot_sector_field(
+                sector_eps_data_factory(timeframe), field="mean_pe"
+            ),
         ),
         "sector_eps_plot_uri": cache_plot(
-            sector_eps_cache_key, lambda: plot_sector_field(df, field="sum_eps")
+            sector_eps_cache_key,
+            lambda: plot_sector_field(
+                sector_eps_data_factory(timeframe), field="sum_eps"
+            ),
         ),
         "market_pe_plot_uri": market_pe_plot_uri,
         "sector_positive_top_contributors_eps_uri": cache_plot(
             f"top-contributors-{sector_eps_cache_key}",
-            lambda: plot_sector_top_eps_contributors(eps_df, ss),
+            lambda: plot_sector_top_eps_contributors(make_pe_trends_eps_df(df), ss),
             dont_cache=True,
         ),
     }

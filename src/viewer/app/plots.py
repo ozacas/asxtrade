@@ -258,6 +258,12 @@ def plot_portfolio_contributors(
     return plot
 
 
+def plot_price_trend(data_factory: Callable) -> p9.ggplot:
+    df = data_factory()
+    print(df)
+    return None
+
+
 def plot_portfolio_stock_performance(
     data_factory: Callable[[], pd.DataFrame], figure_width: int = 12, date_text_size=7
 ) -> p9.ggplot:

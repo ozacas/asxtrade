@@ -29,6 +29,7 @@ from app.views.watchlist import show_watched, toggle_watched, cluster_stocks_vie
 from app.views.stock import (
     show_stock,
     show_trends,
+    show_total_earnings,
     show_purchase_performance,
     show_financial_metrics,
 )

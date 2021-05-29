@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from app.models import (
     cached_all_stocks_cip,
     Timeframe,
+    stocks_by_sector,
     validate_user,
     user_watchlist,
     all_etfs,
@@ -16,7 +17,7 @@ from app.models import (
     validate_stock,
     financial_metrics,
 )
-from app.data import make_kmeans_cluster_dataframe
+from app.data import make_kmeans_cluster_dataframe, make_pe_trends_eps_df, pe_trends_df
 
 
 def save_dataframe_to_file(df, filename, output_format):
@@ -42,7 +43,7 @@ def save_dataframe_to_file(df, filename, output_format):
 
 def get_dataset(dataset_wanted, request):
     assert (
-        dataset_wanted in set(["market_sentiment"])
+        dataset_wanted in set(["market_sentiment", "eps-per-sector"])
         or dataset_wanted.startswith("kmeans-")
         or dataset_wanted.startswith("financial-metrics-")
     )
@@ -79,7 +80,11 @@ def get_dataset(dataset_wanted, request):
             df.columns = colnames
             # FALLTHRU
         return df
-
+    elif dataset_wanted == "eps-per-sector":
+        df, _ = pe_trends_df(Timeframe(past_n_days=180))
+        df = make_pe_trends_eps_df(df, stocks_by_sector())
+        df = df.set_index("asx_code", drop=True)
+        return df
     else:
         raise ValueError("Unsupported dataset {}".format(dataset_wanted))
 
