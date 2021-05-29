@@ -57,7 +57,10 @@ def get_commodities(as_choices=False):
     try:
         commodities = ip.commodities.get_commodities()
         if as_choices:
-            return [(l["name"], l["full_name"]) for i, l in commodities.iterrows()]
+            return [
+                (l["name"], l["full_name"])
+                for i, l in sorted(commodities.iterrows(), key=lambda t: t[1]["name"])
+            ]
         else:
             return commodities
     except (ValueError, ConnectionError, IOError) as e:
