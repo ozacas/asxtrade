@@ -520,7 +520,7 @@ def plot_heatmap(
     """
     Plot the specified data matrix as binned values (heatmap) with X axis being dates over the specified timeframe and Y axis being
     the percentage change on the specified date (other metrics may also be used, but you will likely need to adjust the bins)
-    Also computes top10/worst10 and returns a tuple (plot, top10, bottom10, n_stocks). Top10/Bottom10 will contain n_top_bottom stocks.
+    :rtype: p9.ggplot instance representing the heatmap
     """
     df = data_factory()
     bins, labels = bin_cb()
