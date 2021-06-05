@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from typing import Callable, Iterable
 import plotnine as p9
 import pandas as pd
+import numpy as np
 from app.models import (
     Timeframe,
     user_purchases,
@@ -136,10 +137,18 @@ def show_companies(
             df["fetch_date"] = pd.to_datetime(df["fetch_date"], format="%Y-%m-%d")
             # smooth each line to make the plot more readable
             textual_df = df[df["fetch_date"] == dates[-1]]
+            df["rank"] = pd.qcut(df["value"], 10, labels=False)
+            df["rank"] = np.clip(float(df["rank"]) / 10, 0.2, 1.0)
             plot = (
                 p9.ggplot(
                     df,
-                    p9.aes("fetch_date", "value", group="asx_code", colour="asx_code"),
+                    p9.aes(
+                        "fetch_date",
+                        "value",
+                        group="asx_code",
+                        colour="asx_code",
+                        alpha="rank",
+                    ),
                 )
                 + p9.geom_smooth(size=1.3, se=False)
                 + p9.geom_text(
