@@ -105,7 +105,9 @@ def user_theme(
     title: str = "",
     **plot_theme,
 ) -> p9.ggplot:
-    theme_args = {
+    """Render the specified plot in the current theme with common attributes to all plots eg. legend_position etc. The themed plot is
+    returned. Saves code in each plot by handled all the standard stuff here."""
+    theme_args = {  # TODO FIXME... make defaults chosen from user profile
         "axis_text_x": p9.element_text(size=7),
         "axis_text_y": p9.element_text(size=7),
         "figure_size": (12, 6),
@@ -121,7 +123,7 @@ def user_theme(
     want_fill_continuous = theme_args.pop("asxtrade_want_fill_continuous", False)
     plot = (
         plot
-        + p9.theme_bw()
+        + p9.theme_bw()  # TODO FIXME... make chosen theme from user profile
         + p9.labs(x=x_axis_label, y=y_axis_label, title=title)
         + p9.theme(**theme_args)
     )
