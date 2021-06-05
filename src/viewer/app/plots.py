@@ -57,20 +57,12 @@ def cached_company_versus_sector(
 
 
 @timing
-def cached_sector_performance(
-    sector: str, sector_companies, cip: pd.DataFrame, window_size=14
-):
-    cache_key = f"{sector}-sector-performance"
-
+def cached_sector_performance(sector: str, sector_companies, cip: pd.DataFrame):
     def inner():
         df = make_sector_performance_dataframe(cip, sector_companies)
-        return (
-            plot_sector_performance(df, sector, window_size=window_size)
-            if df is not None
-            else None
-        )
+        return plot_sector_performance(df, sector) if df is not None else None
 
-    return cache_plot(cache_key, inner)
+    return cache_plot(f"{sector}-sector-performance", inner)
 
 
 def cached_portfolio_performance(user):
@@ -104,6 +96,42 @@ def cached_portfolio_performance(user):
         cache_plot(stock_key, lambda: plot_portfolio_stock_performance(data_factory)),
         cache_plot(contributors_key, lambda: plot_portfolio_contributors(data_factory)),
     )
+
+
+def user_theme(
+    plot: p9.ggplot,
+    x_axis_label: str = "",
+    y_axis_label: str = "",
+    title: str = "",
+    **plot_theme,
+) -> p9.ggplot:
+    theme_args = {
+        "axis_text_x": p9.element_text(size=7),
+        "axis_text_y": p9.element_text(size=7),
+        "figure_size": (12, 6),
+        "legend_position": "none",
+    }
+    theme_args.update(**plot_theme)
+
+    # remove asxtrade kwargs
+    want_cmap_d = theme_args.pop("asxtrade_want_cmap_d", True)
+    want_fill_d = theme_args.pop(
+        "asxtrade_want_fill_d", False
+    )  # most graphs dont fill, so False by default
+    want_fill_continuous = theme_args.pop("asxtrade_want_fill_continuous", False)
+    plot = (
+        plot
+        + p9.theme_bw()
+        + p9.labs(x=x_axis_label, y=y_axis_label, title=title)
+        + p9.theme(**theme_args)
+    )
+    if want_cmap_d:
+        plot += p9.scale_colour_cmap_d()
+    if want_fill_d:
+        plot += p9.scale_fill_cmap_d()
+    elif want_fill_continuous:
+        plot += p9.scale_fill_cmap()
+    return plot
 
 
 def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=True):
@@ -141,17 +169,12 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     )  # dont show the no change bin since it dominates the activity heatmap
     df["bin_ordered"] = pd.Categorical(df["bin"], categories=order)
 
-    plot = (
-        p9.ggplot(df, p9.aes("date", "bin_ordered", fill="value"))
-        + p9.geom_tile(show_legend=False)
-        + p9.theme_bw()
-        + p9.xlab("")
-        + p9.ylab("Daily change (%)")
-        + p9.theme(axis_text_x=p9.element_text(angle=30, size=7), figure_size=(10, 5))
+    plot = p9.ggplot(df, p9.aes("date", "bin_ordered", fill="value")) + p9.geom_tile(
+        show_legend=False
     )
     if plot_text_labels:
         plot = plot + p9.geom_text(p9.aes(label="value"), size=8, color="white")
-    return plot
+    return user_theme(plot, y_axis_label="Daily change (%)")
 
 
 def plot_fundamentals(
@@ -188,17 +211,8 @@ def plot_fundamentals(
         )
         + p9.geom_path(show_legend=False, size=line_size)
         + p9.facet_wrap("~ indicator", nrow=n, ncol=1, scales="free_y")
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=7),
-            axis_text_y=p9.element_text(size=7),
-            figure_size=(8, n),
-        )
-        + p9.scale_color_cmap_d()
-        #    + p9.aes(ymin=0)
-        + p9.xlab("")
-        + p9.ylab("")
     )
-    return plot
+    return user_theme(plot, figure_size=(12, n))
 
 
 def plot_overall_portfolio(
@@ -219,17 +233,14 @@ def plot_overall_portfolio(
     df = df.melt(id_vars=["date"], var_name="field")
     plot = (
         p9.ggplot(df, p9.aes("date", "value", group="field", color="field"))
-        + p9.labs(x="", y="$ AUD")
         + p9.geom_line(size=line_size)
         + p9.facet_wrap("~ field", nrow=3, ncol=1, scales="free_y")
-        + p9.scale_colour_cmap_d()
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=date_text_size),
-            figure_size=figure_size,
-            legend_position="none",
-        )
     )
-    return plot
+    return user_theme(
+        plot,
+        y_axis_label="$ AUD",
+        axis_text_x=p9.element_text(angle=30, size=date_text_size),
+    )
 
 
 def plot_portfolio_contributors(
@@ -250,12 +261,11 @@ def plot_portfolio_contributors(
     plot = (
         p9.ggplot(df, p9.aes("stock", "value", group="stock", fill="stock"))
         + p9.geom_bar(stat="identity")
-        + p9.scale_fill_cmap_d()
-        + p9.labs(x="", y="$ AUD")
         + p9.facet_grid("contribution ~ field", scales="free_y")
-        + p9.theme(legend_position="none", figure_size=figure_size)
     )
-    return plot
+    return user_theme(
+        plot, y_axis_label="$ AUD", figure_size=figure_size, asxtrade_want_fill_d=True
+    )
 
 
 def plot_price_trend(data_factory: Callable) -> p9.ggplot:
@@ -286,16 +296,14 @@ def plot_portfolio_stock_performance(
 
     plot = (
         p9.ggplot(df, p9.aes("date", "stock_profit", group="stock", colour="stock"))
-        + p9.xlab("")
         + p9.geom_line(size=1.0)
         + p9.facet_wrap("~bins", ncol=1, nrow=len(bins), scales="free_y")
-        + p9.scale_colour_cmap_d()
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=date_text_size),
-            figure_size=(figure_width, int(len(bins) * 1.2)),
-        )
     )
-    return plot
+    return user_theme(
+        plot,
+        figure_size=(figure_width, int(len(bins) * 1.2)),
+        axis_text_x=p9.element_text(angle=30, size=date_text_size),
+    )
 
 
 def plot_company_rank(data_factory: Callable[[], tuple]) -> p9.ggplot:
@@ -317,15 +325,13 @@ def plot_company_rank(data_factory: Callable[[], tuple]) -> p9.ggplot:
             size=6,
             show_legend=False,
         )
-        + p9.xlab("")
         + p9.facet_wrap("~bin", nrow=n_bin, ncol=1, scales="free_y")
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=7),
-            figure_size=(8, 20),
-            subplots_adjust={"right": 0.8},
-        )
     )
-    return plot
+    return user_theme(
+        plot,
+        figure_size=(8, 20),
+        subplots_adjust={"right": 0.8},
+    )
 
 
 def plot_company_versus_sector(
@@ -333,20 +339,15 @@ def plot_company_versus_sector(
 ) -> str:
     df["date"] = pd.to_datetime(df["date"])
     # print(df)
-    plot = (
-        p9.ggplot(
-            df, p9.aes("date", "value", group="group", color="group", fill="group")
-        )
-        + p9.geom_line(size=1.5)
-        + p9.xlab("")
-        + p9.ylab("Change since start (%)")
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=7),
-            figure_size=(8, 4),
-            subplots_adjust={"right": 0.8},
-        )
+    plot = p9.ggplot(
+        df, p9.aes("date", "value", group="group", color="group", fill="group")
+    ) + p9.geom_line(size=1.5)
+    return user_theme(
+        plot,
+        y_axis_label="Change since start (%)",
+        subplots_adjust={"right": 0.8},
+        legend_position="right",
     )
-    return plot
 
 
 def plot_market_wide_sector_performance(
@@ -398,18 +399,13 @@ def plot_market_wide_sector_performance(
         + p9.facet_wrap(
             "~sector", nrow=n_unique_sectors // n_col + 1, ncol=n_col, scales="free_y"
         )
-        + p9.xlab("")
-        + p9.ylab("Average sector change (%)")
-        + p9.scale_colour_cmap_d()
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=6),
-            axis_text_y=p9.element_text(size=6),
-            figure_size=(12, 6),
-            panel_spacing=0.3,
-            legend_position="none",
-        )
     )
-    return plot
+    return user_theme(
+        plot,
+        y_axis_label="Average sector change (%)",
+        panel_spacing=0.3,
+        axis_text_x=p9.element_text(angle=30, size=7),
+    )
 
 
 def plot_series(
@@ -432,20 +428,18 @@ def plot_series(
     args = {"x": x, "y": y}
     if color:
         args["color"] = color
-    plot = (
-        p9.ggplot(df, p9.aes(**args))
-        + p9.labs(x=x_axis_label, y=y_axis_label)
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=tick_text_size),
-            axis_text_y=p9.element_text(size=tick_text_size),
-            legend_position="none",
-        )
-    )
+    plot = p9.ggplot(df, p9.aes(**args))
     if use_smooth_line:
         plot += p9.geom_smooth(size=line_size)
     else:
         plot += p9.geom_line(size=line_size)
-    return plot
+    return user_theme(
+        plot,
+        x_axis_label=x_axis_label,
+        y_axis_label=y_axis_label,
+        axis_text_x=p9.element_text(angle=30, size=tick_text_size),
+        axis_text_y=p9.element_text(size=tick_text_size),
+    )
 
 
 def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
@@ -453,21 +447,16 @@ def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
     assert set(df.columns).intersection(set(["market", "market_cap", "bin"])) == set(
         ["market", "market_cap", "bin"]
     )
-
-    small_text = p9.element_text(size=7)
     plot = (
         p9.ggplot(df)
         + p9.geom_boxplot(p9.aes(x="market", y="market_cap"))
         + p9.facet_wrap("bin", scales="free_y")
-        + p9.labs(x="", y="Market cap. ($AUD Millions)")
-        + p9.theme(
-            subplots_adjust={"wspace": 0.30},
-            axis_text_x=small_text,
-            axis_text_y=small_text,
-            figure_size=(12, 6),
-        )
     )
-    return plot
+    return user_theme(
+        plot,
+        y_axis_label="Market cap. ($AUD Millions)",
+        subplots_adjust={"wspace": 0.30},
+    )
 
 
 def plot_breakdown(data_factory: Callable[[], tuple]) -> tuple:
@@ -505,15 +494,20 @@ def plot_breakdown(data_factory: Callable[[], tuple]) -> tuple:
     plot = (
         p9.ggplot(df, p9.aes(x="factor(sector_name_cat)", fill="factor(increasing)"))
         + p9.geom_bar()
-        + p9.labs(x="Sector", y="Number of stocks")
-        + p9.theme(
-            axis_text_y=p9.element_text(size=7),
-            subplots_adjust={"left": 0.2, "right": 0.85},
-            legend_title=p9.element_blank(),
-        )
         + p9.coord_flip()
     )
-    return plot, top10, bottom10
+    return (
+        user_theme(
+            plot,
+            x_axis_label="Sector",
+            y_axis_label="Number of stocks",
+            subplots_adjust={"left": 0.2, "right": 0.85},
+            legend_title=p9.element_blank(),
+            asxtrade_want_fill_d=True,
+        ),
+        top10,
+        bottom10,
+    )
 
 
 def plot_heatmap(
@@ -544,37 +538,28 @@ def plot_heatmap(
         return None
 
 
-def plot_sector_performance(dataframe: pd.DataFrame, descriptor: str, window_size=14):
+def plot_sector_performance(dataframe: pd.DataFrame, descriptor: str):
     assert len(dataframe) > 0
+    dataframe["date"] = pd.to_datetime(dataframe["date"], format="%Y-%m-%d")
 
-    fig, axes = plt.subplots(3, 1, figsize=(6, 5), sharex=True)
-    timeline = pd.to_datetime(dataframe["date"])
-    locator, formatter = auto_dates()
     # now do the plot
-    for name, ax, linecolour, title in zip(
-        ["n_pos", "n_neg", "n_unchanged"],
-        axes,
-        ["darkgreen", "red", "grey"],
-        [
-            "{} stocks up >5%".format(descriptor),
-            "{} stocks down >5%".format(descriptor),
-            "Remaining stocks",
-        ],
-    ):
-        # use a moving average to smooth out 5-day trading weeks and see the trend
-        series = dataframe[name].rolling(window_size).mean()
-        ax.plot(timeline, series, color=linecolour)
-        ax.set_ylabel("", fontsize=8)
-        ax.set_ylim(0, max(series.fillna(0)) + 10)
-        ax.set_title(title, fontsize=8)
-        ax.xaxis.set_major_locator(locator)
-        ax.xaxis.set_major_formatter(formatter)
-
-        # Remove the automatic x-axis label from all but the bottom subplot
-        if ax != axes[-1]:
-            ax.set_xlabel("")
-
-    return fig
+    labels = [
+        "Number of stocks up >5%",
+        "Number of stocks down >5%",
+        "Remaining stocks",
+    ]
+    # print(dataframe)
+    dataframe.columns = labels + ["date"]
+    melted_df = dataframe.melt(value_vars=labels, id_vars="date")
+    plot = (
+        p9.ggplot(
+            melted_df,
+            p9.aes("date", "value", colour="variable", group="factor(variable)"),
+        )
+        + p9.facet_wrap("~variable", ncol=1, scales="free_y")
+        + p9.geom_line(size=1.3)
+    )
+    return user_theme(plot)
 
 
 def auto_dates():
@@ -804,17 +789,20 @@ def plot_trend(data_factory: Callable[[], tuple], sample_period="M") -> str:
     dataframe = dataframe.transpose()
     dataframe.index = pd.to_datetime(dataframe.index, format="%Y-%m-%d")
     dataframe = dataframe.resample(sample_period).max()
-    # print(dataframe.index)
+    print(dataframe)
     plot = (
-        p9.ggplot(dataframe, p9.aes(x="dataframe.index", y=dataframe.columns[0]))
-        + p9.geom_bar(stat="identity", fill="#880000", alpha=0.5)
+        p9.ggplot(
+            dataframe,
+            p9.aes(
+                x="dataframe.index", y=dataframe.columns[0], fill=dataframe.columns[0]
+            ),
+        )
+        + p9.geom_bar(stat="identity", alpha=0.7)
         + p9.scale_x_datetime(
             labels=inner_date_fmt
         )  # dont print day (always 1st day of month due to resampling)
-        + p9.labs(x="", y="$AUD")
-        + p9.theme(axis_text_x=p9.element_text(angle=30, size=7))
     )
-    return plot
+    return user_theme(plot, y_axis_label="$ AUD", asxtrade_want_fill_continuous=True)
 
 
 def plot_point_scores(cache_key: str, point_score_dataframe: pd.DataFrame) -> str:
@@ -834,14 +822,17 @@ def plot_points_by_rule(cache_key: str, net_points_by_rule: defaultdict(int)) ->
         for k, v in net_points_by_rule.items():
             rows.append({"rule": str(k), "net_points": v})
         df = pd.DataFrame.from_records(rows)
-        return (
-            p9.ggplot(df, p9.aes(x="rule", y="net_points"))
-            + p9.labs(x="Rule", y="Contribution to points by rule")
-            + p9.geom_bar(stat="identity", fill="#880000", alpha=0.5)
-            + p9.theme(
-                axis_text_y=p9.element_text(size=7), subplots_adjust={"left": 0.2}
-            )
+        plot = (
+            p9.ggplot(df, p9.aes(x="rule", y="net_points", fill="net_points"))
+            + p9.geom_bar(stat="identity", alpha=0.7)
             + p9.coord_flip()
+        )
+        return user_theme(
+            plot,
+            x_axis_label="Rule",
+            y_axis_label="Contributions to points by rule",
+            subplots_adjust={"left": 0.2},
+            asxtrade_want_fill_continuous=True,
         )
 
     return cache_plot(cache_key, inner)
@@ -872,15 +863,9 @@ def plot_boxplot_series(df, normalisation_method=None):
     plot = (
         p9.ggplot(melted, p9.aes(x="fetch_date", y="value"))
         + p9.geom_boxplot(outlier_colour="blue")
-        + p9.theme(
-            axis_text_x=p9.element_text(size=7),
-            axis_text_y=p9.element_text(size=7),
-            figure_size=(12, n_inches),
-        )
-        + p9.labs(x="Date (YYYY-MM-DD)", y=y_label)
         + p9.coord_flip()
     )
-    return plot
+    return user_theme(plot, y_axis_label=y_label, figure_size=(12, n_inches))
 
 
 def plot_sector_field(df: pd.DataFrame, field, n_col=3):
@@ -894,18 +879,14 @@ def plot_sector_field(df: pd.DataFrame, field, n_col=3):
         + p9.facet_wrap(
             "~sector", nrow=n_unique_sectors // n_col + 1, ncol=n_col, scales="free_y"
         )
-        + p9.xlab("")
-        + p9.ylab(f"Sector-wide {field}")
-        + p9.theme(
-            axis_text_x=p9.element_text(angle=30, size=6),
-            axis_text_y=p9.element_text(size=6),
-            figure_size=(12, 6),
-            panel_spacing=0.3,
-            legend_position="none",
-        )
     )
 
-    return plot
+    return user_theme(
+        plot,
+        y_axis_label=f"Sector-wide {field}",
+        panel_spacing=0.3,
+        axis_text_x=p9.element_text(angle=30, size=7),
+    )
 
 
 def plot_sector_top_eps_contributors(
@@ -929,7 +910,7 @@ def plot_sector_top_eps_contributors(
     n_sectors = last_known_eps["sector_name"].nunique()
     last_known_eps["eps"] = last_known_eps[most_recent_date]
 
-    return (
+    plot = (
         p9.ggplot(
             last_known_eps,
             p9.aes(
@@ -939,18 +920,16 @@ def plot_sector_top_eps_contributors(
                 fill="sector_name",
             ),
         )
-        + p9.geom_bar(stat="identity", show_legend=False)
+        + p9.geom_bar(stat="identity")
         + p9.facet_wrap("~sector_name", ncol=1, nrow=n_sectors, scales="free")
-        + p9.theme(
-            figure_size=(12, int(n_sectors * 1.5)),
-            axis_text_x=p9.element_text(size=6),
-            axis_text_y=p9.element_text(size=6),
-            subplots_adjust={"hspace": 0.40},
-        )
-        + p9.scale_fill_cmap_d()
-        + p9.labs(
-            y="EPS ($AUD)",
-            x="Top 10 ASX stocks per sector as at {}".format(most_recent_date),
-        )
         + p9.coord_flip()
+    )
+    return user_theme(
+        plot,
+        y_axis_label="EPS ($AUD)",
+        x_axis_label="Top 10 ASX stocks per sector as at {}".format(most_recent_date),
+        subplots_adjust={"hspace": 0.4},
+        figure_size=(12, int(n_sectors * 1.5)),
+        asxtrade_want_cmap_d=False,
+        asxtrade_want_fill_d=True,
     )

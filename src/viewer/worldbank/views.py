@@ -16,6 +16,7 @@ import plotnine as p9
 from mizani.formatters import date_format
 import pandas as pd
 from app.data import cache_plot, label_shorten
+from app.plots import user_theme
 from worldbank.models import (
     WorldBankIndicators,
     WorldBankCountry,
@@ -117,11 +118,7 @@ def worldbank_plot(
     plot = (
         p9.ggplot(df, p9.aes("date", "metric", **plot_kwargs))
         + p9.geom_path(size=1.2)
-        + p9.theme_classic()
-        + p9.labs(x="", y="Value", title=title)
-        + p9.theme(figure_size=figure_size)
         + p9.scale_y_continuous(labels=label_shorten)
-        + p9.scale_color_cmap_d()
     )
     if dates_are_yearly:
         plot += p9.scale_x_datetime(
@@ -131,7 +128,7 @@ def worldbank_plot(
     # so we use geom_point() to highlight the sparse nature of the data
     if pct_na >= 30.0 or add_points or df["metric"].count() <= 3:
         plot += p9.geom_point(size=3.0)
-    return plot
+    return user_theme(plot, y_axis_label="Value", figure_size=figure_size)
 
 
 def fetch_data(
@@ -456,11 +453,8 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
                 **kwargs,
             )
             plot += p9.facet_wrap("~dataset", ncol=1, scales="free_y")
-            plot += p9.labs(x="", y="")
-            plot += p9.theme(
-                legend_position="none"
-            )  # disable legend since each facet has its own title
-            return plot
+
+            return user_theme(plot, figure_size=figure_size)
 
         indicator_id_str = "-".join([i.wb_id for i in indicators])
         return cache_plot(

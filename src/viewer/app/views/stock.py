@@ -1,6 +1,7 @@
 """
 Responsible for providing detiled views about a single stock and closely related views
 """
+from matplotlib.pyplot import subplots_adjust
 import pandas as pd
 import plotnine as p9
 from django.contrib.auth.decorators import login_required
@@ -29,6 +30,7 @@ from app.analysis import (
 from app.messages import warning
 from app.data import cache_plot, make_point_score_dataframe, label_shorten, pe_trends_df
 from app.plots import (
+    user_theme,
     plot_point_scores,
     plot_points_by_rule,
     plot_fundamentals,
@@ -50,9 +52,7 @@ def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
     sector = stock_info(stock).get("sector_name", "")
 
     # implement caching (in memory) at image level to avoid all data manipulation if at all possible
-    sector_momentum_plot = cached_sector_performance(
-        sector, sector_companies, cip, window_size=14
-    )
+    sector_momentum_plot = cached_sector_performance(sector, sector_companies, cip)
     c_vs_s_plot = cached_company_versus_sector(stock, sector, sector_companies, cip)
 
     # invoke separate function to cache the calls when we can
@@ -167,12 +167,9 @@ def show_financial_metrics(request, stock=None):
             p9.ggplot(df, p9.aes(x="date", y="value", colour="metric"))
             + p9.geom_line(size=1.3)
             + p9.geom_point(size=3)
-            + p9.theme(subplots_adjust={"left": 0.2})
             + p9.scale_y_continuous(labels=label_shorten)
-            + p9.scale_color_cmap_d()
-            + p9.labs(x="", y="")
         )
-        return plot
+        return user_theme(plot, subplots_adjust={"left": 0.2})
 
     def linear_trending_metrics():
         df = data_df.filter(good_linear_metrics, axis=0)
@@ -182,11 +179,8 @@ def show_financial_metrics(request, stock=None):
         df = df.melt(id_vars="metric").dropna(how="any", axis=0)
         plot = plot_metrics(df)
         plot += p9.facet_wrap("~metric", ncol=1, scales="free_y")
-        plot += p9.theme(
-            figure_size=(12, int(len(good_linear_metrics) * 1.5)),
-            legend_position="none",
-        )
-        return plot
+
+        return user_theme(plot, figure_size=(12, int(len(good_linear_metrics) * 1.5)))
 
     def exponential_growth_metrics():
         df = data_df.filter(good_exp_metrics, axis=0)
@@ -196,10 +190,8 @@ def show_financial_metrics(request, stock=None):
         df = df.melt(id_vars="metric").dropna(how="any", axis=0)
         plot = plot_metrics(df)
         plot += p9.facet_wrap("~metric", ncol=1, scales="free_y")
-        plot += p9.theme(
-            figure_size=(12, int(len(good_exp_metrics) * 1.5)), legend_position="none"
-        )
-        return plot
+
+        return user_theme(plot, figure_size=(12, int(len(good_exp_metrics) * 1.5)))
 
     def inner():
         df = data_df.filter(["Ebit", "Total Revenue", "Earnings"], axis=0)
@@ -209,8 +201,7 @@ def show_financial_metrics(request, stock=None):
         df["metric"] = df.index
         df = df.melt(id_vars="metric").dropna(how="any", axis=0)
         plot = plot_metrics(df)
-        plot += p9.theme(figure_size=(12, 6))
-        return plot
+        return user_theme(plot)
 
     er_uri = cache_plot(f"{stock}-earnings-revenue-plot", inner)
     trending_metrics_uri = cache_plot(
@@ -380,21 +371,15 @@ def show_total_earnings(request):
                 ),
             )
             + p9.geom_line(size=1.2)
-            + p9.labs(
-                x="", y="Total sector earnings ($AUD, positive contributions only)"
-            )
             + p9.facet_wrap("~sector_name", ncol=2, scales="free_y")
-            + p9.scale_color_cmap_d()
-            + p9.theme(
-                figure_size=(12, 14),
-                legend_position="none",
-                subplots_adjust={"wspace": 0.25},
-                axis_text_x=p9.element_text(size=7, rotation=30),
-                axis_text_y=p9.element_text(size=7),
-            )
             + p9.scale_y_continuous(labels=label_shorten)
         )
-        return plot
+        return user_theme(
+            plot,
+            y_axis_label="Total sector earnings ($AUD, positive contributions only)",
+            figure_size=(12, 14),
+            subplots_adjust={"wspace": 0.25},
+        )
 
     context = {
         "title": "Earnings per sector over time",

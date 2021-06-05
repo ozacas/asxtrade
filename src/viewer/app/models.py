@@ -460,8 +460,7 @@ def stocks_by_sector() -> pd.DataFrame:
     ]
     df = pd.DataFrame.from_records(rows)
     assert len(df) > 0
-    colnames = set(df.columns)
-    assert "asx_code" in colnames and "sector_name" in colnames
+    assert set(["asx_code", "sector_name"]) == set(df.columns)
     return df
 
 

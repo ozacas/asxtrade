@@ -15,6 +15,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.generic.edit import FormView
 import plotnine as p9
 import pandas as pd
+from app.plots import user_theme
 
 
 class CryptoFormView(LoginRequiredMixin, FormView):
@@ -44,11 +45,8 @@ class CryptoFormView(LoginRequiredMixin, FormView):
                 nrow=melted_df["variable"].nunique(),
                 scales="free_y",
             )
-            + p9.theme(figure_size=(12, 6))
-            + p9.scale_color_cmap_d()
-            + p9.labs(x="", y="")
         )
-        return plot
+        return user_theme(plot)
 
     def process_form(self, cleaned_data: dict) -> dict:
         timeframe = Timeframe(past_n_days=cleaned_data["timeframe"])

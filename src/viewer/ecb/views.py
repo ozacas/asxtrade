@@ -3,6 +3,7 @@ from django.http import Http404
 from django.shortcuts import render
 from app.models import validate_user
 from app.data import cache_plot
+from app.plots import user_theme
 from app.messages import warning
 from django.contrib.auth.decorators import login_required
 from ecb.models import ECBFlow, fetch_dataframe, detect_dataframe
@@ -91,9 +92,8 @@ class ECBDataflowView(LoginRequiredMixin, FormView):
                 p9.ggplot(df, p9.aes(x=x_axis_column, y=y_axis_column))
                 + p9.geom_point()
                 + p9.geom_line()
-                + p9.labs(title="", x="", y="")
-                + p9.theme(figure_size=(12, 6))
             )
+            plot = user_theme(plot)
 
         context = self.get_context_data()
         cache_key = "-".join(sorted(form.cleaned_data.values())) + "-ecb-plot"
