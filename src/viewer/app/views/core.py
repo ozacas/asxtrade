@@ -138,7 +138,8 @@ def show_companies(
             # smooth each line to make the plot more readable
             textual_df = df[df["fetch_date"] == dates[-1]]
             df["rank"] = pd.qcut(df["value"], 10, labels=False)
-            df["rank"] = np.clip(float(df["rank"]) / 10, 0.2, 1.0)
+            df["rank"] = np.clip((df["rank"] / 10) + 0.1, 0.4, 1.0)
+
             plot = (
                 p9.ggplot(
                     df,
@@ -147,10 +148,9 @@ def show_companies(
                         "value",
                         group="asx_code",
                         colour="asx_code",
-                        alpha="rank",
                     ),
                 )
-                + p9.geom_smooth(size=1.3, se=False)
+                + p9.geom_line(p9.aes(alpha="rank"), size=1.3)
                 + p9.geom_text(
                     textual_df,
                     p9.aes(x="fetch_date", y="value", label="asx_code"),
