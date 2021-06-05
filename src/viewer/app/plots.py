@@ -285,6 +285,8 @@ def plot_portfolio_stock_performance(
     # latest_profit = df[df["date"] == latest_date]
     # print(df)
     pivoted_df = df.pivot(index="stock", columns="date", values="stock_profit")
+    latest_date = pivoted_df.columns[-1]
+    print(latest_date)
     mean_profit = pivoted_df.mean(axis=1)
     n_stocks = len(mean_profit)
     # if we want ~4 stocks per facet plot, then we need to specify the appropriate calculation for df.qcut()
@@ -292,15 +294,25 @@ def plot_portfolio_stock_performance(
     # print(bins)
     df = df.merge(bins.to_frame(name="bins"), left_on="stock", right_index=True)
     # print(df)
+    textual_df = df[df["date"] == latest_date]
+    # print(textual_df)
     # melted_df = make_portfolio_dataframe(df, melt=True)
 
     plot = (
         p9.ggplot(df, p9.aes("date", "stock_profit", group="stock", colour="stock"))
         + p9.geom_line(size=1.0)
         + p9.facet_wrap("~bins", ncol=1, nrow=len(bins), scales="free_y")
+        + p9.geom_text(
+            p9.aes(x="date", y="stock_profit", label="stock"),
+            color="black",
+            size=9,
+            data=textual_df,
+            position=p9.position_jitter(width=10, height=10),
+        )
     )
     return user_theme(
         plot,
+        y_axis_label="$ AUD",
         figure_size=(figure_width, int(len(bins) * 1.2)),
         axis_text_x=p9.element_text(angle=30, size=date_text_size),
     )
