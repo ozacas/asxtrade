@@ -135,11 +135,25 @@ def show_companies(
             df = df.melt(value_vars=dates, id_vars="asx_code")
             df["fetch_date"] = pd.to_datetime(df["fetch_date"], format="%Y-%m-%d")
             # smooth each line to make the plot more readable
-            plot = p9.ggplot(
-                df, p9.aes("fetch_date", "value", group="asx_code", colour="asx_code")
-            ) + p9.geom_smooth(size=1.3, se=False)
+            textual_df = df[df["fetch_date"] == dates[-1]]
+            plot = (
+                p9.ggplot(
+                    df,
+                    p9.aes("fetch_date", "value", group="asx_code", colour="asx_code"),
+                )
+                + p9.geom_smooth(size=1.3, se=False)
+                + p9.geom_text(
+                    textual_df,
+                    p9.aes(x="fetch_date", y="value", label="asx_code"),
+                    color="black",
+                    size=9,
+                    position=p9.position_jitter(width=1, height=1),
+                )
+            )
+
             return user_theme(
-                plot, y_axis_label="Cumulative Return (%)", legend_position="right"
+                plot,
+                y_axis_label="Cumulative Return (%)",
             )
 
         top10_plot_uri = cache_plot(
