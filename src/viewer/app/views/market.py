@@ -121,8 +121,6 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
         "n_days": timeframe.n_days,
         "n_stocks_plotted": len(asx_codes),
         "n_top_bottom": n_top_bottom,
-        # "best_ten": top10,
-        # "worst_ten": bottom10,
         "watched": user_watchlist(request.user),
         "sector_performance_uri": sector_performance_plot,
         "sector_timeframe": sector_timeframe,

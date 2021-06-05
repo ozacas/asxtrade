@@ -167,7 +167,7 @@
     </div>
     <div class="row mt-4 col-md-auto">
         <table>
-           {% include "topNbottomN.html" with series=best_ten %}
+           {% include "topNbottomN.html" with series=best_ten piccie=top10_plot_uri %}
         </table>
     </div>
 
@@ -176,7 +176,7 @@
     </div>
     <div class="row mt-4 col-md-auto">
         <table>
-            {% include "topNbottomN.html" with series=worst_ten %}
+            {% include "topNbottomN.html" with series=worst_ten piccie=bottom10_plot_uri %}
         </table>
     </div>
 {% endif %}

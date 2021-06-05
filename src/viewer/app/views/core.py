@@ -8,15 +8,27 @@ from django.core.cache import cache
 from django.shortcuts import render
 from django.http import Http404, HttpResponse
 from django.contrib.auth.decorators import login_required
+from typing import Callable, Iterable
+import plotnine as p9
+import pandas as pd
 from app.models import (
-    Timeframe, user_purchases, latest_quote, user_watchlist,
-    selected_cached_stocks_cip, valid_quotes_only,
-    all_available_dates, validate_date, validate_user, 
-    all_etfs, increasing_yield, increasing_eps
+    Timeframe,
+    user_purchases,
+    latest_quote,
+    user_watchlist,
+    selected_cached_stocks_cip,
+    valid_quotes_only,
+    all_available_dates,
+    validate_date,
+    validate_user,
+    all_etfs,
+    increasing_yield,
+    increasing_eps,
 )
 from app.messages import info, warning, add_messages
-from app.plots import cached_heatmap, plot_breakdown
+from app.plots import cached_heatmap, plot_breakdown, user_theme
 from app.data import cache_plot
+
 
 @login_required
 def png(request, key):
@@ -25,22 +37,25 @@ def png(request, key):
     all content is image only (not data) and the key is always a SHA256 hash with random content making it extremely difficult to guess.
     As further security PNG images served from the cache can only be accessed with a valid login.
     """
-    assert request is not None # dont yet require user login for this endpoint, but maybe we should???
+    assert (
+        request is not None
+    )  # dont yet require user login for this endpoint, but maybe we should???
     try:
         byte_value = cache.get(key)
         assert isinstance(byte_value, bytes)
         response = HttpResponse(byte_value, content_type="image/png")
-        #response['X-Accel-Redirect'] = reader.name
+        # response['X-Accel-Redirect'] = reader.name
         return response
     except KeyError:
-        raise Http404('No such cached image: {}'.format(key))
+        raise Http404("No such cached image: {}".format(key))
+
 
 def show_companies(
-        matching_companies, # may be QuerySet or iterable of stock codes (str)
-        request,
-        sentiment_timeframe: Timeframe,
-        extra_context=None,
-        template_name="all_stocks.html",
+    matching_companies,  # may be QuerySet or iterable of stock codes (str)
+    request,
+    sentiment_timeframe: Timeframe,
+    extra_context=None,
+    template_name="all_stocks.html",
 ):
     """
     Support function to public-facing views to eliminate code redundancy
@@ -60,9 +75,11 @@ def show_companies(
 
     # keep track of stock codes for template convenience
     asx_codes = [quote.asx_code for quote in stocks_queryset.all()]
-    n_top_bottom = extra_context['n_top_bottom'] if 'n_top_bottom' in extra_context else 20
+    n_top_bottom = (
+        extra_context["n_top_bottom"] if "n_top_bottom" in extra_context else 20
+    )
     print("show_companies: found {} stocks".format(len(asx_codes)))
-    
+
     # setup context dict for the render
     context = {
         # NB: title and heatmap_title are expected to be supplied by caller via extra_context
@@ -79,13 +96,13 @@ def show_companies(
     paginator = Paginator(stocks_queryset, 50)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.page(page_number)
-    context['page_obj'] = page_obj
-    context['object_list'] = paginator
+    context["page_obj"] = page_obj
+    context["object_list"] = paginator
 
     def data_factory() -> tuple:
         # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
         cip = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
-        sum_by_company = cip.sum(axis=1) 
+        sum_by_company = cip.sum(axis=1)
         top10 = sum_by_company.nlargest(n_top_bottom)
         bottom10 = sum_by_company.nsmallest(n_top_bottom)
         return cip, top10, bottom10
@@ -93,23 +110,67 @@ def show_companies(
     if len(asx_codes) <= 0:
         warning(request, "No matching companies found.")
     else:
-        sentiment_heatmap_uri = cached_heatmap(asx_codes, sentiment_timeframe, lambda: selected_cached_stocks_cip(asx_codes, sentiment_timeframe))
-        key = "-".join(asx_codes) + "-" + sentiment_timeframe.description + "-breakdown-plot"
-        breakdown_plot, top10, bottom10 = plot_breakdown(data_factory)
+        sentiment_heatmap_uri = cached_heatmap(
+            asx_codes,
+            sentiment_timeframe,
+            lambda: selected_cached_stocks_cip(asx_codes, sentiment_timeframe),
+        )
+        key = (
+            "-".join(asx_codes)
+            + "-"
+            + sentiment_timeframe.description
+            + "-breakdown-plot"
+        )
+        (breakdown_plot, top10, bottom10) = plot_breakdown(data_factory)
         sector_breakdown_uri = cache_plot(key, lambda: breakdown_plot)
 
-        context.update({
-            "best_ten": top10,
-            "worst_ten": bottom10,
-            "sentiment_heatmap_uri": sentiment_heatmap_uri,
-            "sentiment_heatmap_title": "{}: {}".format(context['title'], sentiment_timeframe.description),
-            "sector_breakdown_uri": sector_breakdown_uri,
-        })
+        def plot_cumulative_returns(
+            data_factory: Callable, wanted_stocks: Iterable[str]
+        ) -> p9.ggplot:
+            # print(wanted_stocks)
+            df, _, _ = data_factory()
+            df = df.filter(wanted_stocks, axis=0).cumsum(axis=1)
+            dates = df.columns
+            df["asx_code"] = df.index
+            df = df.melt(value_vars=dates, id_vars="asx_code")
+            df["fetch_date"] = pd.to_datetime(df["fetch_date"], format="%Y-%m-%d")
+            # smooth each line to make the plot more readable
+            plot = p9.ggplot(
+                df, p9.aes("fetch_date", "value", group="asx_code", colour="asx_code")
+            ) + p9.geom_smooth(size=1.3, se=False)
+            return user_theme(
+                plot, y_axis_label="Cumulative Return (%)", legend_position="right"
+            )
+
+        top10_plot_uri = cache_plot(
+            f"top10-plot-{'-'.join(top10.index)}",
+            lambda: plot_cumulative_returns(data_factory, top10.index),
+            dont_cache=True,
+        )
+        bottom10_plot_uri = cache_plot(
+            f"bottom10-plot-{'-'.join(bottom10.index)}",
+            lambda: plot_cumulative_returns(data_factory, bottom10.index),
+            dont_cache=True,
+        )
+
+        context.update(
+            {
+                "best_ten": top10,
+                "worst_ten": bottom10,
+                "sentiment_heatmap_uri": sentiment_heatmap_uri,
+                "sentiment_heatmap_title": "{}: {}".format(
+                    context["title"], sentiment_timeframe.description
+                ),
+                "sector_breakdown_uri": sector_breakdown_uri,
+                "top10_plot_uri": top10_plot_uri,
+                "bottom10_plot_uri": bottom10_plot_uri,
+            }
+        )
 
     if extra_context:
         context.update(extra_context)
     add_messages(request, context)
-    #print(context)
+    # print(context)
     return render(request, template_name, context=context)
 
 
@@ -122,10 +183,17 @@ def show_all_stocks(request):
     validate_date(ymd)
     qs, _ = valid_quotes_only(ymd)
     timeframe = Timeframe()
-    return show_companies(qs, request, timeframe, extra_context={
-        "title": "All stocks",
-        "sentiment_heatmap_title": "All stock sentiment: {}".format(timeframe.description)
-    })
+    return show_companies(
+        qs,
+        request,
+        timeframe,
+        extra_context={
+            "title": "All stocks",
+            "sentiment_heatmap_title": "All stock sentiment: {}".format(
+                timeframe.description
+            ),
+        },
+    )
 
 
 @login_required
@@ -142,6 +210,7 @@ def show_etfs(request):
         Timeframe(),
         extra_context,
     )
+
 
 @login_required
 def show_increasing_eps_stocks(request):

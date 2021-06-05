@@ -14,3 +14,15 @@
         {% if forloop.counter|divisibleby:5 %}</td></tr><tr><td></td><td>{% endif %}
 {% endfor %}
 </td></tr>
+
+{% if piccie is not None %}
+<tr>
+    <td></td>
+    <td>
+        <img class="mt-4" src="/png/{{ piccie }}" alt="cumulative returns" />
+    </td>
+</tr>
+<tr>
+    <p>Note: each line is smoothed to improve readability - not an exact depiction</p>
+</tr>
+{% endif %}
