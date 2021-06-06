@@ -7,8 +7,7 @@
         summed:
         <ul>
             <li>for each company: <tt>EPS * number of shares</tt> listed is computed</li>
-            <li>companies with negative EPS will detract from the sector</li>
-            <li>all companies in a given sector have their current value added together</li>
+            <li>only companies with a positive EPS will contribute to each sector</li>
             <li>both EPS and number of shares are obtained from the ASX data API</li>
             <li>timeframe: {{ timeframe.description }}</li>
             <li>all sectors results over the timeframe are shown below</li>

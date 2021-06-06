@@ -354,14 +354,15 @@ def show_total_earnings(request):
 
     def data_factory(timeframe: Timeframe) -> pd.DataFrame:
         df, n_stocks = pe_trends_df(timeframe)
+        # print(df)
         df = df.pivot(
             index=["asx_code", "fetch_date"], columns="field_name", values="field_value"
         )
         df = df[df["number_of_shares"] > 0]  # ignore stocks which have unknown shares
         # print(df)
+        df = df[df["eps"] > 0.0]  # ignore stocks burning cash
         df["total_earnings"] = df["eps"] * df["number_of_shares"]
         df = df.dropna(how="any", axis=0)
-        # df = df[df["total_earnings"] > 0]  # ignore stocks burning cash
         df = df.reset_index()
         df = df.pivot(index="asx_code", columns="fetch_date", values="total_earnings")
         df = df.merge(stocks_by_sector(), left_index=True, right_on="asx_code")
@@ -371,6 +372,7 @@ def show_total_earnings(request):
         df = df.melt(id_vars="sector_name", var_name="fetch_date")
         assert set(df.columns) == set(["sector_name", "fetch_date", "value"])
         df["fetch_date"] = pd.to_datetime(df["fetch_date"])
+        # print(df)
         return df
 
     def plot(df: pd.DataFrame) -> p9.ggplot:
