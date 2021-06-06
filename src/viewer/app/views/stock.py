@@ -162,18 +162,20 @@ def show_financial_metrics(request, stock=None):
         f"n_metrics == {len(data_df)} n_trending={len(linear_metrics.keys())} n_good_fit={len(good_linear_metrics)} n_good_exp={len(good_exp_metrics)}"
     )
 
-    def plot_metrics(df: pd.DataFrame):
+    def plot_metrics(df: pd.DataFrame, use_short_labels=False, **kwargs):
         plot = (
             p9.ggplot(df, p9.aes(x="date", y="value", colour="metric"))
             + p9.geom_line(size=1.3)
             + p9.geom_point(size=3)
-            #  + p9.scale_y_continuous(labels=label_shorten)
         )
+        if use_short_labels:
+            plot += p9.scale_y_continuous(labels=label_shorten)
         n_metrics = df["metric"].nunique()
         return user_theme(
             plot,
             subplots_adjust={"left": 0.2},
             figure_size=(12, int(n_metrics * 1.5)),
+            **kwargs,
         )
 
     def linear_trending_metrics():
@@ -182,7 +184,7 @@ def show_financial_metrics(request, stock=None):
             return None
         df["metric"] = df.index
         df = df.melt(id_vars="metric").dropna(how="any", axis=0)
-        plot = plot_metrics(df)
+        plot = plot_metrics(df, use_short_labels=True)
         plot += p9.facet_wrap("~metric", ncol=1, scales="free_y")
         return plot
 
@@ -204,7 +206,12 @@ def show_financial_metrics(request, stock=None):
             return None
         df["metric"] = df.index
         df = df.melt(id_vars="metric").dropna(how="any", axis=0)
-        plot = plot_metrics(df)
+        plot = plot_metrics(
+            df,
+            use_short_labels=True,
+            legend_position="right",
+            y_axis_label="$ AUD",
+        )  # need to show metric name somewhere on plot
         return plot
 
     er_uri = cache_plot(f"{stock}-earnings-revenue-plot", inner)
