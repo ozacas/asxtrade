@@ -803,7 +803,7 @@ def plot_trend(data_factory: Callable[[], tuple], sample_period="M") -> str:
     dataframe = dataframe.transpose()
     dataframe.index = pd.to_datetime(dataframe.index, format="%Y-%m-%d")
     dataframe = dataframe.resample(sample_period).max()
-    print(dataframe)
+    # print(dataframe)
     plot = (
         p9.ggplot(
             dataframe,
