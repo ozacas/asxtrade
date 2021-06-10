@@ -106,6 +106,7 @@ def show_companies(
         sum_by_company = cip.sum(axis=1)
         top10 = sum_by_company.nlargest(n_top_bottom)
         bottom10 = sum_by_company.nsmallest(n_top_bottom)
+
         return cip, top10, bottom10
 
     if len(asx_codes) <= 0:
@@ -138,6 +139,7 @@ def show_companies(
             # smooth each line to make the plot more readable
             textual_df = df[df["fetch_date"] == dates[-1]]
             df["rank"] = pd.qcut(df["value"], 10, labels=False)
+            df["rank"] = df["rank"].fillna(value=0.4)
             df["rank"] = np.clip((df["rank"] / 10) + 0.1, 0.4, 1.0)
 
             plot = (
@@ -160,20 +162,15 @@ def show_companies(
                 )
             )
 
-            return user_theme(
-                plot,
-                y_axis_label="Cumulative Return (%)",
-            )
+            return user_theme(plot, y_axis_label="Cumulative Return (%)")
 
         top10_plot_uri = cache_plot(
             f"top10-plot-{'-'.join(top10.index)}",
             lambda: plot_cumulative_returns(data_factory, top10.index),
-            dont_cache=True,
         )
         bottom10_plot_uri = cache_plot(
             f"bottom10-plot-{'-'.join(bottom10.index)}",
             lambda: plot_cumulative_returns(data_factory, bottom10.index),
-            dont_cache=True,
         )
 
         context.update(
