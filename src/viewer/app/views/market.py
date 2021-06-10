@@ -9,6 +9,7 @@ from numpy import isnan
 import pandas as pd
 from cachetools import func
 from django.shortcuts import render
+from django.http import Http404
 from django.contrib.auth.decorators import login_required
 from app.messages import warning
 from app.models import (
@@ -62,7 +63,8 @@ def make_quote_df(quotes, asx_codes: Iterable[str], prefix: str):
         orient="index",
         columns=["market_cap", "last_price", "shares"],
     )
-    # print(df)
+    if len(df) == 0:
+        raise Http404(f"No data present in {len(quotes)} quotes.")
     df["bin"] = df.apply(bin_market_cap, axis=1)
     df["market"] = prefix
     return df
