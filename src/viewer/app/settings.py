@@ -159,3 +159,7 @@ CACHES = {
         "LOCATION": CACHE_DIR,
     },
 }
+
+# ABS indicator API key (registration required, optional)
+ABS_API_KEY = ''
+
