@@ -2,6 +2,7 @@ import django.db.models as model
 from djongo.models import ObjectIdField, DjongoManager
 from django.conf import settings
 import json
+import requests
 from typing import Iterable
 import pandas as pd
 import pandasdmx as sdmx
@@ -65,13 +66,16 @@ def data(dataflow_id: str, abs_api_key: str = None) -> pd.DataFrame:
         "Accept": "text/json",
         "x-api-key": abs_api_key,
     }
-    resp = sdmx.api.read_url(
-        f"https://indicator.data.abs.gov.au/data/{dataflow_id}", headers=headers
-    )
-    df = sdmx.to_pandas(resp, rtype="compat")
-    print(df)
+    url = f"https://indicator.data.abs.gov.au/data/{dataflow_id}"
+    resp = sdmx.api.read_url(url, headers=headers)
+    df = sdmx.to_pandas(resp, rtype="rows", attributes="osg")
     assert isinstance(df, pd.DataFrame)
+    resp = requests.get(url, headers=headers)
+    tree = json.loads(resp.content)
+    import pprint
 
+    print(df)
+    pprint.pprint(tree["structure"])
     return df
 
 
