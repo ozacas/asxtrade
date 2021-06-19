@@ -63,7 +63,17 @@ cd src/viewer # for setting up the website
 
 Next, you'll want to setup a database to store the ASX data: instructions for this can be found at the [MongoDB website](https://docs.mongodb.com/manual/administration/install-community/)
 
-### Setup the website and superuser for administrating the site
+### Installing data
+
+Data since 2020 is loaded into an archive file, which it is recommended you load to help get you started:
+
+~~~~
+  mongorestore --db=asxtrade --archive=data/asxtrade-20210618.bson
+~~~~
+This will give you 2021 and 2020 ASX prices, World Bank and ABS free datasets. The scripts provided below can then be run to ingest historical prices.
+The above command may need to be altered with credentials to the database and authorisation to perform the restoration.
+
+### Setup the data and website
 
 ~~~~
 python3 manage.py migrate
@@ -74,7 +84,8 @@ export MPLBACKEND=Agg # recommended: all testing is done with this matplotlib ba
 python3 manage.py runserver # run on local dev. host
 ~~~~
 
-### Installing data
+
+### Updating data
 
   This application only works with daily data fetched after 4pm each trading day from the ASX website. It will take several hours per run. After the run, you must update the current month's pre-pivoted market data cache. The setup and daily run process is similar to:
   
@@ -96,7 +107,6 @@ python3 manage.py runserver # run on local dev. host
   
 This new data may not appear in the application until the cache entries expire (or alternatively you can restart the server).
 
-  Existing data ready to import into mongodb v4.4 can be fetched from [github large file storage](https://github.com/ozacas/asxtrade/raw/master/data/asxtrade.20210306.bson.gz) using [mongorestore](https://docs.mongodb.com/database-tools/mongorestore/). This data covers the daily data from July 2020 thru March 2021, although ETF data covers a smaller period due to missing code.
 
 ## Features
 
@@ -159,8 +169,7 @@ It has [been observed](https://github.com/ranaroussi/yfinance/issues/250) that i
 particularly for ASX stocks. Use at own risk. This data is therefore considered experimental and pages using this data are labelled with a warning.
 If data is not ingested, then the 'Show financial performance' button on stock views (as well as data download) will 404. This data is not available for ETFs and some stocks at this time. It is planned to support search for companies by a metric. 
 
-You can also use this program to fill gaps - as yfinance supports up to five years of historical data: use the `--fill-gaps` option for this. It is recommended to always fetch current data using
-`asxtrade.py` but at least historical prices can be filled in with this approach. There are numerous limitations with this approach: many fields of a quotation are left unchanged as no data is available.
+You can also use this program to fill gaps - as yfinance supports up to five years of historical data: use the `--fill-gaps` option for this. It is recommended to always fetch current data using `asxtrade.py` but at least historical prices can be filled in with this approach. There are numerous limitations with this approach: many fields of a quotation are left unchanged as no data is available.
 
 ### Macroeconomic datasets: Australian Bureau of Statistics (experimental)
 
@@ -188,3 +197,5 @@ the startPeriod to reduce the amount of historical data fetched.
 ABS provides a free-registration associated with headline data. This includes CPI, Employment, Import/Export and Earnings data, amongst others. All that is required is to register for a free API key (which can take a week or two to arrive via email) and then choose ABS Headlines from the left. Note that this data is downloaded at the time of usage, so it does not ingest a-priori.
 
 Registration for a key can be done at the [ABS Website](https://api.gov.au/apis)
+
+Once you have this key, modify `src/viewer/app/settings.py` to include your new key at `ABS_API_KEY` setting.
