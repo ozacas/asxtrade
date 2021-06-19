@@ -165,11 +165,16 @@ You can also use this program to fill gaps - as yfinance supports up to five yea
 ### Macroeconomic datasets: Australian Bureau of Statistics (experimental)
 
 ABS provides several different APIs:
+
  - Indicator API (headline financial/economic indicators eg. employment, CPI etc.)
+
  - free API using [pandasdmx](https://pandasdmx.readthedocs.io/en/v1.0/): census data and other datasets accessible online also
 
-ingest_abs.py supports both by ingesting the data into MongoDB first. The indicator API data is only available if you request
-an API key and use it when invoking ingest_abs.py using --api-key:
+Each of these is described below.
+
+#### Free API
+
+Dataframes can be ingested into MongoDB using:
 
 ~~~~
   python3 ingest_abs.py --help
@@ -177,3 +182,9 @@ an API key and use it when invoking ingest_abs.py using --api-key:
 
 Some of the datasets can consume more than 8GB of memory during download so a 16GB machine is recommended for ingestion. Alternatively reduce
 the startPeriod to reduce the amount of historical data fetched.
+
+#### Indicator API
+
+ABS provides a free-registration associated with headline data. This includes CPI, Employment, Import/Export and Earnings data, amongst others. All that is required is to register for a free API key (which can take a week or two to arrive via email) and then choose ABS Headlines from the left. Note that this data is downloaded at the time of usage, so it does not ingest a-priori.
+
+Registration for a key can be done at the [ABS Website](https://api.gov.au/apis)
