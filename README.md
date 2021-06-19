@@ -199,3 +199,7 @@ ABS provides a free-registration associated with headline data. This includes CP
 Registration for a key can be done at the [ABS Website](https://api.gov.au/apis)
 
 Once you have this key, modify `src/viewer/app/settings.py` to include your new key at `ABS_API_KEY` setting.
+
+### Cryptocurrency, bonds, commodities and other data (experimental)
+
+Preliminary support through [investpy](https://investpy.readthedocs.io/_info/introduction.html) is now available for visualising data associated with commodities, cryptocurrencies and world-wide bonds. Nothing needs to be configured for this, as data is downloaded if requested. 
