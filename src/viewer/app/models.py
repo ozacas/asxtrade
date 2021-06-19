@@ -530,7 +530,8 @@ def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tupl
             "-annual_dividend_yield", "-last_price", "-volume"
         )  # default order_by, see below
     )
-    if len(results) == 0 and ensure_date_has_data:
+    # a date is considered not to have data if <1000 stocks (data currently being downloaded?)
+    if len(results) < 1000 and ensure_date_has_data:
         # decrease date by 1 and try again... (we cant increment because this might go into the future)
         dt = datetime.strptime(ymd, "%Y-%m-%d") - timedelta(days=1)
         return valid_quotes_only(
@@ -724,6 +725,12 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
         if len(df) == 0:  # dont return empty dataframes
             return None
         # print(tag, " ", stocks, " ", df.columns)
+
+        # as documented at https://towardsdatascience.com/speeding-up-pandas-dataframe-concatenation-748fe237244e
+        # but we probably dont need to do this given the blobs being stored in parquet format
+        # df = df.reset_index(drop=True)
+
+        # and finish the rest...
         if tag.startswith("uber") and stocks is not None:
             is_desired_stock = df["asx_code"].isin(set(stocks))
             return df[is_desired_stock]

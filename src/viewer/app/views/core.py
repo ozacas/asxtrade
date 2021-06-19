@@ -138,9 +138,9 @@ def show_companies(
             df["fetch_date"] = pd.to_datetime(df["fetch_date"], format="%Y-%m-%d")
             # smooth each line to make the plot more readable
             textual_df = df[df["fetch_date"] == dates[-1]]
-            df["rank"] = pd.qcut(df["value"], 10, labels=False)
-            df["rank"] = df["rank"].fillna(value=0.4)
+            df["rank"] = pd.qcut(df["value"], 10, labels=False, duplicates='drop')
             df["rank"] = np.clip((df["rank"] / 10) + 0.1, 0.4, 1.0)
+            df["rank"] = df["rank"].fillna(value=0.4)
 
             plot = (
                 p9.ggplot(

@@ -68,15 +68,55 @@ def data(dataflow_id: str, abs_api_key: str = None) -> pd.DataFrame:
     }
     url = f"https://indicator.data.abs.gov.au/data/{dataflow_id}"
     resp = sdmx.api.read_url(url, headers=headers)
+    # surely there has to be a better way to make a nice dataframe than this... TODO FIXME...
+    structure = json.loads(resp.response.content)["structure"]["dimensions"]["series"]
+    replacements = []
+    new_cols = {}
+    for d in structure:
+        col_name = d.get("id", None)
+        replacement_col_name = d.get("name", None)
+        for v in d["values"]:
+            orig_value = v["id"]
+            replacement_value = v["name"]
+            replacements.append(
+                (col_name, replacement_col_name, orig_value, replacement_value)
+            )
+            new_cols[col_name] = replacement_col_name
+    replacements_df = pd.DataFrame.from_records(
+        replacements, columns=("col", "col_replacement", "val", "val_replacement")
+    )
+    # print(replacements_df)
     df = sdmx.to_pandas(resp, rtype="rows", attributes="osg")
     assert isinstance(df, pd.DataFrame)
-    resp = requests.get(url, headers=headers)
-    tree = json.loads(resp.content)
-    import pprint
 
-    print(df)
-    pprint.pprint(tree["structure"])
-    return df
+    def perform_subst(val, **kwargs):
+        d = kwargs.get("kwds")
+        return d[val] if val in d else val
+
+    def fix_dataframe(
+        df: pd.DataFrame, replacements_df: pd.DataFrame, new_cols: dict
+    ) -> pd.DataFrame:
+        df = df.reset_index(drop=False)
+        cols = [
+            new_cols[col_name] if col_name in new_cols else col_name
+            for col_name in df.columns
+        ]
+
+        # firstly change the values for each column to the recommended values for plotting
+        for col_name in df.columns:
+            reps = replacements_df[replacements_df["col"] == col_name]
+            if len(reps) > 0:
+                reps_as_dict = {
+                    getattr(t, "val"): getattr(t, "val_replacement")
+                    for t in reps.itertuples()
+                }
+                df[col_name] = df[col_name].apply(perform_subst, kwds=reps_as_dict)
+        # finally change the column names to ABS preferred names for the column
+        df.columns = cols
+        print(df)
+        return df
+
+    return fix_dataframe(df, replacements_df, new_cols)
 
 
 def dataflows(update: bool = False, abs_api_key: str = None) -> Iterable[ABSDataflow]:
