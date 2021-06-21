@@ -46,7 +46,7 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
                 continue
 
         extra_args = {}
-
+        need_shape = False
         if len(facets) > 2:
             # can only use two variables as plotting facets, third value will be used as a group on each plot
             # any more facets is not supported at this stage
@@ -54,7 +54,8 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
             # print(n_per_facet)
             # print(sorted_facets)
             facets = sorted_facets[-2:]
-            extra_args.update({"group": sorted_facets[0], "color": facets[0]})
+            extra_args.update({"group": sorted_facets[0], "color": facets[0], 'shape': sorted_facets[0]})
+            need_shape = True
             print(f"Using {facets} as facets, {extra_args} as series")
         else:
             if len(facets) > 0:
@@ -98,6 +99,10 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
             len(facets) == 2
         ):  # two columns of plots? if so, make sure  space for axis labels
             plot_theme.update({"subplots_adjust": {"wspace": 0.2}})
+        if need_shape:
+            plot += p9.scale_shape(guide="legend")
+            plot += p9.guides(colour=False) # colour legend is not useful since it is included in the facet title
+            plot_theme.update({'legend_position': 'right'})
         return user_theme(plot, **plot_theme)
 
     def form_valid(self, form):
