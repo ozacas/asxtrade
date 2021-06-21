@@ -47,7 +47,9 @@ def load_prices(db, field_name, month, year) -> pd.DataFrame:
               'field_name': field_name,
               'field_value': clean_value(row[field_name])}
               for row in db.asx_prices.find({'fetch_date': { "$in": days_of_month},
-                                              field_name: { "$exists": True }},
+                                              field_name: { "$exists": True },
+                                             'suspended': { "$ne": True },
+                                            },
                                             {'asx_code': 1, field_name: 1, 'fetch_date': 1})
            ]
     if len(rows) == 0:
