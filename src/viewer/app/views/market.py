@@ -200,9 +200,10 @@ def show_pe_trends(request):
                     assert pe >= 0.0
                     sum_pe_per_sector[sector] += pe
 
-            # print(sum_pe_per_sector)
-            assert len(sector_counts_pe_pos_stocks_only) == len(sum_pe_per_sector)
-            assert len(sector_counts_all_stocks) == len(sum_eps_per_sector)
+            # print(len(sector_counts_all_stocks))
+            # print(len(sum_eps_per_sector))
+            assert len(sector_counts_pe_pos_stocks_only) >= len(sum_pe_per_sector)
+            assert len(sector_counts_all_stocks) >= len(sum_eps_per_sector)
             for sector in all_sectors:
                 pe_sum = sum_pe_per_sector.get(sector, None)
                 n_pe = sector_counts_pe_pos_stocks_only.get(sector, None)
