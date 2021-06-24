@@ -24,6 +24,7 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
     def plot_abs_dataframe(self, df: pd.DataFrame) -> p9.ggplot:
         facets = []
         n_per_facet = {}
+        print(df)
         for col in df.columns:
             try:
                 n_values = df[col].nunique()
@@ -54,7 +55,13 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
             # print(n_per_facet)
             # print(sorted_facets)
             facets = sorted_facets[-2:]
-            extra_args.update({"group": sorted_facets[0], "color": facets[0], 'shape': sorted_facets[0]})
+            extra_args.update(
+                {
+                    "group": sorted_facets[0],
+                    "color": facets[0],
+                    "shape": sorted_facets[0],
+                }
+            )
             need_shape = True
             print(f"Using {facets} as facets, {extra_args} as series")
         else:
@@ -79,9 +86,9 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
                 else:
                     new_facets.append(f)
             facets = new_facets
+            if "color" in extra_args:
+                extra_args.update({"color": facets[0]})
             print(f"Renamed facet columns due to whitespace: {facets}")
-
-        print(df)
 
         plot = p9.ggplot(
             df, p9.aes(x="TIME_PERIOD", y="value", **extra_args)
@@ -101,8 +108,10 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
             plot_theme.update({"subplots_adjust": {"wspace": 0.2}})
         if need_shape:
             plot += p9.scale_shape(guide="legend")
-            plot += p9.guides(colour=False) # colour legend is not useful since it is included in the facet title
-            plot_theme.update({'legend_position': 'right'})
+            plot += p9.guides(
+                colour=False
+            )  # colour legend is not useful since it is included in the facet title
+            plot_theme.update({"legend_position": "right"})
         return user_theme(plot, **plot_theme)
 
     def form_valid(self, form):

@@ -57,6 +57,44 @@ class ABSDataflow(model.Model):
     objects = DjongoManager()
 
 
+class ABSHeadlineDataRecord(model.Model):
+    dataflow = model.TextField()
+    idx = model.IntegerField(blank=False, null=False)
+    time_period = model.TextField(null=False, blank=False)
+    variable = model.TextField(null=False, blank=False)
+    value = model.TextField()
+
+    objects = DjongoManager()
+
+    class Meta:
+        db_table = "abs_headline_data"
+
+
+def update_datapoints(df: pd.DataFrame, dataflow: str) -> None:
+    assert dataflow is not None and len(dataflow) > 0
+    df = df.rename(
+        columns={"TIME_PERIOD": "time_period"}
+    )  # for django model compatibility
+    cols = set(df.columns)
+    df["dataflow"] = dataflow
+    df["idx"] = df.index
+    id_cols = set(["time_period", "dataflow", "idx"])
+    value_cols = cols.difference(id_cols)
+    df = df.melt(id_vars=id_cols, value_vars=value_cols)
+    # print(df)
+    n = 0
+    for d in df.to_dict("records"):
+        n += 1
+        ABSHeadlineDataRecord.objects.update_or_create(
+            defaults=d,
+            time_period=d["time_period"],
+            idx=d["idx"],
+            dataflow=dataflow,
+            variable=d["variable"],
+        )
+    print(f"Updated {n} ABS data records.")
+
+
 def data(dataflow_id: str, abs_api_key: str = None) -> pd.DataFrame:
     assert len(dataflow_id) > 0
     if abs_api_key is None:
@@ -113,6 +151,7 @@ def data(dataflow_id: str, abs_api_key: str = None) -> pd.DataFrame:
                 df[col_name] = df[col_name].apply(perform_subst, kwds=reps_as_dict)
         # finally change the column names to ABS preferred names for the column
         df.columns = cols
+        update_datapoints(df, dataflow_id)
         print(df)
         return df
 
