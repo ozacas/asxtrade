@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 from app.models import (
     Timeframe,
+    stocks_by_sector,
     user_purchases,
     latest_quote,
     user_watchlist,
@@ -70,12 +71,22 @@ def show_companies(
         # FALLTHRU
 
     # sort queryset as this will often be requested by the USER
-    sort_by = tuple(request.GET.get("sort_by", "asx_code").split(","))
-    info(request, "Sorting by {}".format(sort_by))
-    stocks_queryset = stocks_queryset.order_by(*sort_by)
+    arg = request.GET.get("sort_by", "asx_code")
+    if arg == "sector":
+        ss = {
+            s["asx_code"]: s["sector_name"]
+            for s in stocks_by_sector().to_dict("records")
+        }
+        stocks_queryset = sorted(
+            stocks_queryset, key=lambda s: ss.get(s.asx_code, "Z")
+        )  # companies without sector sort last
+    else:
+        sort_by = tuple(arg.split(","))
+        info(request, "Sorting by {}".format(sort_by))
+        stocks_queryset = stocks_queryset.order_by(*sort_by)
 
     # keep track of stock codes for template convenience
-    asx_codes = [quote.asx_code for quote in stocks_queryset.all()]
+    asx_codes = [quote.asx_code for quote in stocks_queryset]
     n_top_bottom = (
         extra_context["n_top_bottom"] if "n_top_bottom" in extra_context else 20
     )
@@ -93,7 +104,7 @@ def show_companies(
     }
 
     # since we sort above, we must setup the pagination also...
-    assert isinstance(stocks_queryset, QuerySet)
+    # assert isinstance(stocks_queryset, QuerySet)
     paginator = Paginator(stocks_queryset, 50)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.page(page_number)
@@ -138,7 +149,7 @@ def show_companies(
             df["fetch_date"] = pd.to_datetime(df["fetch_date"], format="%Y-%m-%d")
             # smooth each line to make the plot more readable
             textual_df = df[df["fetch_date"] == dates[-1]]
-            df["rank"] = pd.qcut(df["value"], 10, labels=False, duplicates='drop')
+            df["rank"] = pd.qcut(df["value"], 10, labels=False, duplicates="drop")
             df["rank"] = np.clip((df["rank"] / 10) + 0.1, 0.4, 1.0)
             df["rank"] = df["rank"].fillna(value=0.4)
 

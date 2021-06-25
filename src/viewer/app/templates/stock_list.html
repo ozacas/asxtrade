@@ -9,12 +9,13 @@
         <form action="{{ request.path }}" method="GET">
             Sort by <select name="sort_by" id="sort_by" onchange="this.form.submit()">
                 <option value="asx_code">ASX code</option>
-                <option value="-eps">Earnings per share</option>
-                <option value="-annual_dividend_yield">Dividend yield</option>
-                <option value="pe">P/E</option>
                 <option value="change_in_percent">Daily change (%)</option>
                 <option value="change_price">Daily change ($AUD)</option>
+                <option value="-annual_dividend_yield">Dividend yield</option>
+                <option value="-eps">Earnings per share</option>
+                <option value="pe">P/E</option>
                 <option value="last_price">Price ($AUD)</option>
+                <option value="sector">Sector</option>
             </select>
         </form>
     </div>
