@@ -72,14 +72,19 @@ def show_companies(
 
     # sort queryset as this will often be requested by the USER
     arg = request.GET.get("sort_by", "asx_code")
-    if arg == "sector":
+    if arg == "sector" or arg == "sector,eps":
         ss = {
             s["asx_code"]: s["sector_name"]
             for s in stocks_by_sector().to_dict("records")
         }
-        stocks_queryset = sorted(
-            stocks_queryset, key=lambda s: ss.get(s.asx_code, "Z")
-        )  # companies without sector sort last
+        if arg == "sector":
+            stocks_queryset = sorted(
+                stocks_queryset, key=lambda s: ss.get(s.asx_code, "Z")
+            )  # companies without sector sort last
+        else:
+            stocks_queryset = sorted(
+                stocks_queryset, key=lambda s: (ss.get(s.asx_code, "Z"), -s.eps)
+            )
     else:
         sort_by = tuple(arg.split(","))
         info(request, "Sorting by {}".format(sort_by))
