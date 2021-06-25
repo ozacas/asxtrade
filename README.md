@@ -203,3 +203,17 @@ Once you have this key, modify `src/viewer/app/settings.py` to include your new 
 ### Cryptocurrency, bonds, commodities and other data (experimental)
 
 Preliminary support through [investpy](https://investpy.readthedocs.io/_info/introduction.html) is now available for visualising data associated with commodities, cryptocurrencies and world-wide bonds. Nothing needs to be configured for this, as data is downloaded if requested. 
+
+
+## Why build this?
+
+* I like to experiment: its how I learn. I built this using a weird combination of tech - RPI4, Mongo, Django, Python, Matplotlib just to see whether it could be done!
+
+* Keep skills sharp and up-to-date
+
+* Learn finance and the macroeconomic world
+
+* Give back to the community and learn some wonderful tools
+
+* Have fun!
+
