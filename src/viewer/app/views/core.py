@@ -70,6 +70,12 @@ def show_companies(
     elif matching_companies is None or len(matching_companies) > 0:
         stocks_queryset, _ = latest_quote(matching_companies)
         # FALLTHRU
+    else:
+        # no companies to report?
+        warning(request, "No matching companies.")
+        return render(
+            request, template_name, context={"timeframe": sentiment_timeframe}
+        )
 
     # sort queryset as this will often be requested by the USER
     arg = request.GET.get("sort_by", "asx_code")
