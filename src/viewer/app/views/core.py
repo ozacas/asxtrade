@@ -91,8 +91,12 @@ def show_companies(
                 stocks_queryset, key=lambda s: ss.get(s.asx_code, "Z")
             )  # companies without sector sort last
         else:
+            eps_dict = {
+                s.asx_code: s.eps if s.eps is not None else 0.0 for s in stocks_queryset
+            }
             stocks_queryset = sorted(
-                stocks_queryset, key=lambda s: (ss.get(s.asx_code, "Z"), -s.eps)
+                stocks_queryset,
+                key=lambda s: (ss.get(s.asx_code, "Z"), -eps_dict.get(s.asx_code, 0.0)),
             )
     else:
         sort_by = tuple(arg.split(","))
