@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 from app.models import (
     Timeframe,
+    timing,
     stocks_by_sector,
     user_purchases,
     latest_quote,
@@ -72,7 +73,9 @@ def show_companies(
 
     # sort queryset as this will often be requested by the USER
     arg = request.GET.get("sort_by", "asx_code")
-    if arg == "sector" or arg == "sector,eps":
+    info(request, "Sorting by {}".format(arg))
+
+    if arg == "sector" or arg == "sector,-eps":
         ss = {
             s["asx_code"]: s["sector_name"]
             for s in stocks_by_sector().to_dict("records")
@@ -87,7 +90,6 @@ def show_companies(
             )
     else:
         sort_by = tuple(arg.split(","))
-        info(request, "Sorting by {}".format(sort_by))
         stocks_queryset = stocks_queryset.order_by(*sort_by)
 
     # keep track of stock codes for template convenience
@@ -116,6 +118,7 @@ def show_companies(
     context["page_obj"] = page_obj
     context["object_list"] = paginator
 
+    @timing
     def data_factory() -> tuple:
         # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
         cip = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
