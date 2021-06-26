@@ -18,7 +18,6 @@ from app.models import (
     cached_all_stocks_cip,
     valid_quotes_only,
     all_stocks,
-    company_prices,
     Timeframe,
     validate_user,
     stocks_by_sector,
