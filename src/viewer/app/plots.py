@@ -504,7 +504,7 @@ def plot_breakdown(data_factory: Callable[[], tuple]) -> tuple:
     sector_names_cat = pd.Categorical(df["sector_name"], categories=sector_names)
     df = df.assign(sector_name_cat=sector_names_cat)
 
-    print(df)
+    #print(df)
     plot = (
         p9.ggplot(df, p9.aes(x="factor(sector_name_cat)", fill="factor(increasing)"))
         + p9.geom_bar()
