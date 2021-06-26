@@ -868,8 +868,11 @@ def increasing_only_filter(
     # at least 2c per share positive max(eps) is required to be considered significant
     ret = []
     for idx, series in df.iterrows():
-        # print(series)
-        if series.is_monotonic_increasing and max(series) >= min_value:
+        if series.is_monotonic_increasing:
+            # print(series)
+            if max(series) < 0.02:
+                continue
+            assert series.isna().sum() == 0
             ret.append(idx)
 
     return ret
