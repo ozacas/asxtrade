@@ -7,7 +7,7 @@
 {% else %}
     <div class="row mt-2">
         <form action="{{ request.path }}" method="GET">
-            Sort by <select name="sort_by" id="sort_by" onchange="this.form.submit()">
+            Sort by <select name="sort_by" id="sort_by" class="selectpicker" data-style="btn-info" onchange="this.form.submit()">
                 <option value="asx_code">ASX code</option>
                 <option value="change_in_percent">Daily change (%)</option>
                 <option value="change_price">Daily change ($AUD)</option>
@@ -16,7 +16,7 @@
                 <option value="pe">P/E</option>
                 <option value="last_price">Price ($AUD)</option>
                 <option value="sector">Sector</option>
-                <option value="sector,eps">Sector then EPS (desc.)</option>
+                <option value="sector,-eps">Sector then EPS (desc.)</option>
             </select>
         </form>
     </div>
