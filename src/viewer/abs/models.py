@@ -85,13 +85,12 @@ def update_datapoints(df: pd.DataFrame, dataflow: str) -> None:
     n = 0
     for d in df.to_dict("records"):
         n += 1
-        ABSHeadlineDataRecord.objects.update_or_create(
-            defaults=d,
-            time_period=d["time_period"],
-            idx=d["idx"],
-            dataflow=dataflow,
-            variable=d["variable"],
-        )
+        kwargs = dict(**d)
+        kwargs.pop("value", None)
+        print(kwargs.keys())
+
+        ABSHeadlineDataRecord.objects.update_or_create(d, **kwargs)
+
     print(f"Updated {n} ABS data records.")
 
 
