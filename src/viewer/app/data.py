@@ -447,6 +447,8 @@ def make_pe_trends_positive_pe_df(
     )
     positive_pe_stocks = set(pe_df[pe_df.mean(axis=1) > 0].index)
     # print(positive_pe_stocks)
+    # print(pe_df)
+    # print(stocks_with_sector)
     pe_pos_df = pe_df.filter(items=positive_pe_stocks, axis=0).merge(
         stocks_with_sector, left_index=True, right_on="asx_code"
     )
