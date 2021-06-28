@@ -9,6 +9,7 @@ from django.shortcuts import render
 import pandas as pd
 from app.mixins import SearchMixin
 from app.data import cache_plot
+from app.messages import info
 from app.forms import (
     DividendSearchForm,
     SectorSearchForm,
@@ -45,7 +46,9 @@ class DividendYieldSearch(
     form_class = DividendSearchForm
     template_name = "search_form.html"  # generic template, not specific to this view
     action_url = "/search/by-yield"
-    ordering = ("asx_code") # default order must correspond to default JS code in template
+    ordering = (
+        "asx_code"  # default order must correspond to default JS code in template
+    )
     timeframe = Timeframe(past_n_days=30)
     qs = None
 
@@ -308,13 +311,17 @@ class MarketCapSearch(MoverSearch):
         quotes_qs, most_recent_date = latest_quote(None)
         min_cap = kwargs.get("min_cap", 1)
         max_cap = kwargs.get("max_cap", 1000)
-        quotes_qs = quotes_qs.exclude(market_cap__lt=min_cap * 1000 * 1000).exclude(
-            market_cap__gt=max_cap * 1000 * 1000
+        quotes_qs = (
+            quotes_qs.exclude(market_cap__lt=min_cap * 1000 * 1000)
+            .exclude(market_cap__isnull=True)
+            .exclude(market_cap__gt=max_cap * 1000 * 1000)
+            .exclude(suspended__isnull=True)
         )
-        print(
+        info(
+            self.request,
             "Found {} quotes, as at {}, satisfying market cap criteria".format(
                 quotes_qs.count(), most_recent_date
-            )
+            ),
         )
         self.qs = quotes_qs
         return self.qs

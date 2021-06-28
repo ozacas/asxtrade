@@ -224,7 +224,7 @@ class Quotation(model.Model):
     pe = model.FloatField()
     previous_close_price = model.FloatField()
     previous_day_percentage_change = model.FloatField()
-    suspended = model.BooleanField()
+    suspended = model.BooleanField(default=False)
     volume = model.IntegerField()
     year_high_date = model.DateField()
     year_high_price = model.FloatField()

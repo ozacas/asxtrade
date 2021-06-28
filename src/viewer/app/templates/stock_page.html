@@ -30,6 +30,16 @@
     {% include 'stock_sector.html' with data=stock_vs_sector %}
 </div>
 
+{% if month_by_month_return_uri is not None %}
+<div class="row">
+    <div class="mt-4">
+        <h3>Month-by-month percentage returns (%)</h3>
+
+        <img src="/png/{{ month_by_month_return_uri }}" alt="Month-by-month percentage returns" />
+    </div>
+</div>
+{% endif %}
+
 {% include "user-messages.html" %}
 
 {% endblock %}

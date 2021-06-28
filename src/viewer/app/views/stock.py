@@ -8,7 +8,10 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.http import Http404
 from app.models import (
+    latest_quote,
+    Quotation,
     stocks_by_sector,
+    valid_quotes_only,
     validate_stock,
     validate_user,
     stock_info,
@@ -235,6 +238,31 @@ def show_financial_metrics(request, stock=None):
     return render(request, "stock_financial_metrics.html", context=context)
 
 
+def plot_monthly_returns(timeframe: Timeframe, stock: str) -> p9.ggplot:
+    start = timeframe.earliest_date
+    end = timeframe.most_recent_date
+    dt = pd.date_range(start, end, freq="BMS")
+    # print(dt)
+    quotes = [
+        Quotation.objects.filter(fetch_date=quote_date.strftime("%Y-%m-%d"))
+        .filter(asx_code=stock)
+        .first()
+        for quote_date in dt
+    ]
+    last_prices = [q.last_price if q is not None else float("nan") for q in quotes]
+    df = pd.Series(last_prices).to_frame(name="last_price")
+    df.index = dt
+    df["percentage_change"] = df["last_price"].pct_change(periods=1) * 100.0
+    # print(df)
+
+    plot = p9.ggplot(
+        df, p9.aes(x="df.index", y="percentage_change", fill="percentage_change")
+    ) + p9.geom_bar(stat="identity")
+    return user_theme(
+        plot, asxtrade_want_cmap_d=False, asxtrade_want_fill_continuous=True
+    )
+
+
 @login_required
 def show_stock(request, stock=None, n_days=2 * 365):
     """
@@ -265,7 +293,6 @@ def show_stock(request, stock=None, n_days=2 * 365):
     momentum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-rsi-plot",
         lambda: plot_momentum(data_factory, stock, plot_timeframe.earliest_date),
-        dont_cache=True,
     )
     monthly_maximum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-monthly-maximum-plot",
@@ -287,6 +314,10 @@ def show_stock(request, stock=None, n_days=2 * 365):
         },
         "fundamentals": make_fundamentals(plot_timeframe, stock),
         "stock_vs_sector": make_stock_sector(plot_timeframe, stock),
+        "month_by_month_return_uri": cache_plot(
+            f"{plot_timeframe.description}-{stock}-monthly returns",
+            lambda: plot_monthly_returns(plot_timeframe, stock),
+        ),
     }
     return render(request, "stock_page.html", context=context)
 
