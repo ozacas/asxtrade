@@ -5,9 +5,6 @@ and the free ASX API endpoint
 from datetime import datetime, timedelta, date
 import re
 import io
-import json
-import pytz
-import hashlib
 from collections import defaultdict
 import pandas as pd
 from functools import wraps
@@ -404,6 +401,7 @@ def toggle_watchlist_entry(user, asx_stock):
         pass
 
 
+@timing
 def user_watchlist(user):
     """
     Given a user object eg. from find_user() return the set of stock codes which the user
@@ -416,6 +414,7 @@ def user_watchlist(user):
     return results
 
 
+@timing
 @func.lru_cache(maxsize=16)
 def all_available_dates(reference_stock="ANZ"):
     """
@@ -518,6 +517,7 @@ def all_sector_stocks(sector_name: str) -> set:
     return stocks
 
 
+@timing
 @func.lfu_cache(maxsize=2)  # cache today's data only to save memory
 def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tuple:
     validate_date(ymd)
@@ -573,6 +573,7 @@ def desired_dates(
     return sorted(all_dates, key=lambda d: datetime.strptime(d, "%Y-%m-%d"))
 
 
+@timing
 @func.lru_cache(maxsize=2)
 def all_stocks(strict=True):
     """Return all securities known (even if not stocks) if strict=False, otherwise ordinary fully paid shares and ETFs only"""
@@ -663,11 +664,23 @@ def find_named_companies(wanted_name, wanted_activity):
     return ret
 
 
-def latest_quotation_date(stock):
-    d = all_available_dates(reference_stock=stock)
-    return d[-1]
+@timing
+@func.lru_cache(maxsize=200)
+def latest_quotation_date(stock, as_tuple=False):
+    q = None
+    ymd = datetime.today()
+    while q is None:
+        ymd_str = ymd.strftime("%Y-%m-%d")
+        # print(ymd_str)
+
+        q = Quotation.objects.filter(asx_code=stock, fetch_date=ymd_str).first()
+        if q:
+            return (ymd_str, q) if as_tuple else ymd_str
+        ymd -= timedelta(days=1)
+    return None
 
 
+@timing
 def latest_quote(stocks):
     """
     If stocks is a str, retrieves the latest quote and returns a tuple (Quotation, latest_date).
@@ -675,9 +688,8 @@ def latest_quote(stocks):
     If stocks is an iterable, returns a tuple (queryset, latest_date) of selected stocks
     """
     if isinstance(stocks, str):
-        latest_date = latest_quotation_date(stocks)
-        obj = Quotation.objects.get(asx_code=stocks, fetch_date=latest_date)
-        return (obj, latest_date)
+        latest_date, q = latest_quotation_date(stocks, as_tuple=True)
+        return (q, latest_date)
     else:
         latest_date = latest_quotation_date("ANZ")
         qs = Quotation.objects.filter(fetch_date=latest_date)
@@ -689,6 +701,7 @@ def latest_quote(stocks):
         return (qs, latest_date)
 
 
+@timing
 def selected_cached_stocks_cip(stocks, timeframe: Timeframe) -> pd.DataFrame:
     n = len(stocks)
     assert n > 0
@@ -820,7 +833,7 @@ def impute_missing(df, method="linear"):
 
 
 @timing
-@func.ttl_cache(maxsize=1)
+@func.ttl_cache(maxsize=1, ttl=8 * 60 * 60)
 def all_etfs() -> set:
     etf_codes = set()
     for security in Security.objects.all():
@@ -1064,7 +1077,7 @@ def user_purchases(user):
     return purchases
 
 
-@func.ttl_cache(maxsize=100)
+@func.ttl_cache(maxsize=100, ttl=8 * 60 * 60)
 def get_parquet(tag: str) -> pd.DataFrame:
     """
     This function is reserved for the viewer app: other apps have a similar function which use
