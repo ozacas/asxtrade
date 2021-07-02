@@ -26,9 +26,6 @@
 <div class="row">
     {% include 'stock_fundamentals.html' with data=fundamentals %}
 </div>
-<div class="row">
-    {% include 'stock_sector.html' with data=stock_vs_sector %}
-</div>
 
 {% if month_by_month_return_uri is not None %}
 <div class="row">
@@ -39,6 +36,11 @@
     </div>
 </div>
 {% endif %}
+
+<div class="row">
+    {% include 'stock_sector.html' with data=stock_vs_sector %}
+</div>
+
 
 {% include "user-messages.html" %}
 

@@ -19,7 +19,6 @@ from app.models import (
     companies_with_same_sector,
     Timeframe,
     company_prices,
-    rsi_data,
     user_watchlist,
     selected_cached_stocks_cip,
     timing,
@@ -49,20 +48,20 @@ from plotnine.guides.guide_colorbar import guide_colorbar
 
 
 @timing
-def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
-    cip = cached_all_stocks_cip(timeframe)
+def make_stock_sector(timeframe: Timeframe, stock: str, **kwargs) -> dict:
     sector_companies = companies_with_same_sector(stock)
     sector = stock_info(stock).get("sector_name", "")
 
     # implement caching (in memory) at image level to avoid all data manipulation if at all possible
-    sector_momentum_plot = cached_sector_performance(sector, sector_companies, cip)
-    c_vs_s_plot = cached_company_versus_sector(stock, sector, sector_companies, cip)
+    c_vs_s_plot = cached_company_versus_sector(
+        stock, sector, sector_companies, **kwargs
+    )
 
     # invoke separate function to cache the calls when we can
     point_score_plot = net_rule_contributors_plot = None
     if len(sector_companies) > 0:
         df, net_points_by_rule = make_point_score_dataframe(
-            stock, sector_companies, cip, default_point_score_rules()
+            stock, sector_companies, default_point_score_rules(), **kwargs
         )
         ps_cache_key = f"{timeframe.description}-{stock}-point-score-plot"
         np_cache_key = f"{timeframe.description}-{stock}-rules-by-points"
@@ -73,10 +72,6 @@ def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
 
     return {
         "timeframe": timeframe,
-        "sector_momentum": {
-            "plot_uri": sector_momentum_plot,
-            "title": "{} sector stocks".format(sector),
-        },
         "company_versus_sector": {
             "plot_uri": c_vs_s_plot,
             "title": "Performance against sector",
@@ -92,51 +87,31 @@ def make_stock_sector(timeframe: Timeframe, stock: str) -> dict:
     }
 
 
-def make_fundamentals(timeframe: Timeframe, stock: str) -> dict:
+def make_fundamentals(timeframe: Timeframe, stock: str, **kwargs) -> dict:
     """Return a dict of the fundamentals plots for the current django template render to use"""
-
-    def inner():
-        df = company_prices(
-            [stock],
-            timeframe,
-            fields=(
-                "eps",
-                "volume",
-                "last_price",
-                "annual_dividend_yield",
-                "pe",
-                "change_in_percent",
-                "change_price",
-                "market_cap",
-                "number_of_shares",
-            ),
-            missing_cb=None,
-        )
-        # print(df)
-        df["change_in_percent_cumulative"] = df[
-            "change_in_percent"
-        ].cumsum()  # nicer to display cumulative
-        df = df.drop("change_in_percent", axis=1)
-        df["volume"] = (
-            df["last_price"] * df["volume"] / 1000000
-        )  # again, express as $(M)
-        df["market_cap"] /= 1000 * 1000
-        df["number_of_shares"] /= 1000 * 1000
-        df["fetch_date"] = pd.to_datetime(df.index, format="%Y-%m-%d")
-        # print(df.shape)
-        df = df.set_index("fetch_date")
-        df = df.resample(
-            "B"
-        ).asfreq()  # fill gaps in dataframe with business day dates only
-        # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-        #    print(df)
-        df["fetch_date"] = pd.to_datetime(df.index, format="%Y-%m-%d")
-        # print(df.shape)
-        return plot_fundamentals(df, stock)
+    df = kwargs.get("stock_df")
+    # print(df)
+    df["change_in_percent_cumulative"] = df[
+        "change_in_percent"
+    ].cumsum()  # nicer to display cumulative
+    df = df.drop("change_in_percent", axis=1)
+    df["volume"] = df["last_price"] * df["volume"] / 1000000  # again, express as $(M)
+    df["market_cap"] /= 1000 * 1000
+    df["number_of_shares"] /= 1000 * 1000
+    df["fetch_date"] = pd.to_datetime(df.index, format="%Y-%m-%d")
+    # print(df.shape)
+    df = df.set_index("fetch_date")
+    df = df.resample(
+        "B"
+    ).asfreq()  # fill gaps in dataframe with business day dates only
+    # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+    #    print(df)
+    df["fetch_date"] = pd.to_datetime(df.index, format="%Y-%m-%d")
 
     return {
         "plot_uri": cache_plot(
-            f"{stock}-{timeframe.description}-fundamentals-plot", inner
+            f"{stock}-{timeframe.description}-fundamentals-plot",
+            lambda **kwargs: plot_fundamentals(df, stock),
         ),
         "title": "Stock fundamentals: EPS, PE, DY etc.",
         "timeframe": timeframe,
@@ -271,32 +246,42 @@ def show_stock(request, stock=None, n_days=2 * 365):
     validate_stock(stock)
     validate_user(request.user)
     plot_timeframe = Timeframe(past_n_days=n_days)  # for template
-
-    @timing
-    def data_factory():
-        timeframe = Timeframe(
-            past_n_days=n_days + 200
-        )  # add 200 days so MA 200 can initialise itself before the plotting starts...
-        stock_df = rsi_data(
-            stock, timeframe
-        )  # may raise 404 if too little data available
-        prices = stock_df[
-            ["last_price"]
-        ].transpose()  # use list of columns to ensure pd.DataFrame not pd.Series
-        prices = prices.filter(
-            items=plot_timeframe.all_dates(), axis="columns"
-        )  # drop any date in "warm up" period
-        return stock_df, prices
+    df = company_prices(
+        [stock],
+        plot_timeframe,
+        fields=(
+            "eps",
+            "volume",
+            "last_price",
+            "annual_dividend_yield",
+            "pe",
+            "change_in_percent",
+            "change_price",
+            "market_cap",
+            "number_of_shares",
+            "day_low_price",
+            "day_high_price",
+        ),
+        missing_cb=None,
+    )
+    cip_df = cached_all_stocks_cip(plot_timeframe)
 
     # key dynamic images and text for HTML response. We only compute the required data if image(s) not cached
     company_details = stock_info(stock, lambda msg: warning(request, msg))
+    kwargs = {"stock_df": df, "cip_df": cip_df}
     momentum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-rsi-plot",
-        lambda: plot_momentum(data_factory, stock, plot_timeframe.earliest_date),
+        lambda **kwargs: plot_momentum(stock, plot_timeframe, **kwargs),
+        **kwargs,
     )
     monthly_maximum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-monthly-maximum-plot",
-        lambda: plot_trend(data_factory, sample_period="M"),
+        lambda **kwargs: plot_trend(sample_period="M", **kwargs),
+        **kwargs,
+    )
+    monthly_returns_plot = cache_plot(
+        f"{plot_timeframe.description}-{stock}-monthly returns",
+        lambda **kwargs: plot_monthly_returns(plot_timeframe, stock),
     )
 
     # populate template and render HTML page with context
@@ -312,12 +297,9 @@ def show_stock(request, stock=None, n_days=2 * 365):
                 "plot_uri": monthly_maximum_plot,
             },
         },
-        "fundamentals": make_fundamentals(plot_timeframe, stock),
-        "stock_vs_sector": make_stock_sector(plot_timeframe, stock),
-        "month_by_month_return_uri": cache_plot(
-            f"{plot_timeframe.description}-{stock}-monthly returns",
-            lambda: plot_monthly_returns(plot_timeframe, stock),
-        ),
+        "fundamentals": make_fundamentals(plot_timeframe, stock, **kwargs),
+        "stock_vs_sector": make_stock_sector(plot_timeframe, stock, **kwargs),
+        "month_by_month_return_uri": monthly_returns_plot,
     }
     return render(request, "stock_page.html", context=context)
 

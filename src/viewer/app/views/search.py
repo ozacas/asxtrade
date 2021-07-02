@@ -33,7 +33,7 @@ from app.models import (
     CompanyFinancialMetric,
 )
 from app.views.core import show_companies
-from app.plots import plot_boxplot_series
+from app.plots import cached_sector_performance, plot_boxplot_series
 from app.messages import warning
 
 
@@ -111,6 +111,7 @@ class SectorSearchView(DividendYieldSearch):
     form_class = SectorSearchForm
     action_url = "/search/by-sector"
     sector = "Communication Services"  # default to Comms. Services if not specified
+    template_name = "sector_search_form.html"
     sector_id = None
 
     def additional_context(self, context):
@@ -120,6 +121,7 @@ class SectorSearchView(DividendYieldSearch):
             "sector_name": self.sector,
             "sector_id": self.sector_id,
             "sentiment_heatmap_title": "{} sector sentiment".format(self.sector),
+            "sector_performance_plot_uri": self.sector_performance_plot,
         }
 
     def get_queryset(self, **kwargs):
@@ -137,13 +139,14 @@ class SectorSearchView(DividendYieldSearch):
         mrd = latest_quotation_date("ANZ")
         report_top_n = kwargs.get("report_top_n", None)
         report_bottom_n = kwargs.get("report_bottom_n", None)
+        timeframe = Timeframe(past_n_days=90)
+        sector_cip = selected_cached_stocks_cip(wanted_stocks, timeframe)
+        self.sector_performance_plot = cached_sector_performance(
+            self.sector, wanted_stocks, sector_cip
+        )
         if report_top_n is not None or report_bottom_n is not None:
-            cip_sum = (
-                selected_cached_stocks_cip(wanted_stocks, Timeframe(past_n_days=90))
-                .transpose()
-                .sum()
-                .to_frame(name="percent_cip")
-            )
+            cip_sum = sector_cip.transpose().sum().to_frame(name="percent_cip")
+
             # print(cip_sum)
             top_N = (
                 set(cip_sum.nlargest(report_top_n, "percent_cip").index)

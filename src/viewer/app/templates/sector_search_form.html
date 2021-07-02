@@ -1,0 +1,14 @@
+
+{% extends "search_form.html" %}
+
+{% block content %}
+     {% include "stock_list.html" %}
+
+     <div class="row mt-4">
+         <img src="/png/{{ sector_performance_plot_uri }}" alt="{{ sector_name }} performance" />
+     </div>
+
+     <div class="row mt-4">
+          {% include "user-messages.html" %}
+     </div>
+{% endblock %}

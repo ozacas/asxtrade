@@ -29,7 +29,7 @@ from app.models import (
     increasing_eps,
 )
 from app.messages import info, warning, add_messages
-from app.plots import cached_heatmap, plot_breakdown, user_theme
+from app.plots import plot_heatmap, plot_breakdown, user_theme
 from app.data import cache_plot
 
 
@@ -128,39 +128,35 @@ def show_companies(
     context["page_obj"] = page_obj
     context["object_list"] = paginator
 
-    @timing
-    def data_factory() -> tuple:
-        # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
-        cip = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
-        sum_by_company = cip.sum(axis=1)
-        top10 = sum_by_company.nlargest(n_top_bottom)
-        bottom10 = sum_by_company.nsmallest(n_top_bottom)
-
-        return cip, top10, bottom10
+    # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
+    cip = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
+    sum_by_company = cip.sum(axis=1)
+    top10 = sum_by_company.nlargest(n_top_bottom)
+    bottom10 = sum_by_company.nsmallest(n_top_bottom)
+    kwargs = {"cip_df": cip}
 
     if len(asx_codes) <= 0:
         warning(request, "No matching companies found.")
     else:
-        sentiment_heatmap_uri = cached_heatmap(
-            asx_codes,
-            sentiment_timeframe,
-            lambda: selected_cached_stocks_cip(asx_codes, sentiment_timeframe),
+        sorted_codes = "-".join(sorted(asx_codes))
+        sentiment_heatmap_uri = cache_plot(
+            f"{sorted_codes}-{sentiment_timeframe.description}-stocks-sentiment-plot",
+            lambda **kwargs: plot_heatmap(sentiment_timeframe, **kwargs),
+            **kwargs,
         )
-        key = (
-            "-".join(asx_codes)
-            + "-"
-            + sentiment_timeframe.description
-            + "-breakdown-plot"
-        )
-        (breakdown_plot, top10, bottom10) = plot_breakdown(data_factory)
-        sector_breakdown_uri = cache_plot(key, lambda: breakdown_plot)
+
+        key = f"{sorted_codes}-{sentiment_timeframe.description}-breakdown-plot"
+        sector_breakdown_uri = cache_plot(key, plot_breakdown, **kwargs)
 
         def plot_cumulative_returns(
-            data_factory: Callable, wanted_stocks: Iterable[str]
+            wanted_stocks: Iterable[str], **kwargs
         ) -> p9.ggplot:
-            # print(wanted_stocks)
-            df, _, _ = data_factory()
-            df = df.filter(wanted_stocks, axis=0).cumsum(axis=1)
+            df = kwargs.get("cip_df")
+            df = (
+                df.filter(wanted_stocks, axis=0)
+                .filter(regex="^\d", axis=1)
+                .cumsum(axis=1)
+            )
             dates = df.columns
             df["asx_code"] = df.index
             df = df.melt(value_vars=dates, id_vars="asx_code")
@@ -195,11 +191,13 @@ def show_companies(
 
         top10_plot_uri = cache_plot(
             f"top10-plot-{'-'.join(top10.index)}",
-            lambda: plot_cumulative_returns(data_factory, top10.index),
+            lambda **kwargs: plot_cumulative_returns(top10.index, **kwargs),
+            **kwargs,
         )
         bottom10_plot_uri = cache_plot(
             f"bottom10-plot-{'-'.join(bottom10.index)}",
-            lambda: plot_cumulative_returns(data_factory, bottom10.index),
+            lambda **kwargs: plot_cumulative_returns(bottom10.index, **kwargs),
+            **kwargs,
         )
 
         context.update(

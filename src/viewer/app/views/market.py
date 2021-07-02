@@ -29,7 +29,7 @@ from app.data import (
     pe_trends_df,
 )
 from app.plots import (
-    cached_heatmap,
+    plot_heatmap,
     plot_series,
     plot_market_wide_sector_performance,
     plot_market_cap_distribution,
@@ -108,14 +108,31 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
             )
         return result_df
 
-    sentiment_plot = cached_heatmap(all_stocks(), timeframe, data_factory)
+    kwargs = {
+        "cip_data_factory": data_factory,
+        "sector_data_factory": sector_data_factory,
+        "market_cap_data_factory": market_cap_data_factory,
+    }
+    sentiment_plot = cache_plot(
+        f"market-sentiment-{timeframe.description}",
+        lambda **kwargs: plot_heatmap(
+            timeframe, cip_df=kwargs.get("cip_data_factory")()
+        ),
+        **kwargs,
+    )
     sector_performance_plot = cache_plot(
         f"sector-performance-{sector_timeframe.description}",
-        lambda: plot_market_wide_sector_performance(sector_data_factory),
+        lambda **kwargs: plot_market_wide_sector_performance(
+            kwargs.get("sector_data_factory")
+        ),
+        **kwargs,
     )
     market_cap_dist_plot = cache_plot(
         f"market-cap-dist-{sector_timeframe.description}",
-        lambda: plot_market_cap_distribution(market_cap_data_factory),
+        lambda **kwargs: plot_market_cap_distribution(
+            kwargs.get("market_cap_data_factory")
+        ),
+        **kwargs,
     )
     context = {
         "sentiment_uri": sentiment_plot,
