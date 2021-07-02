@@ -161,5 +161,5 @@ CACHES = {
 }
 
 # ABS indicator API key (registration required, optional)
-ABS_API_KEY = 'Si1oUVsFF25p1kXWD8wxU3sZe69UVV0Z9rJfhsXo'
+ABS_API_KEY = os.getenv('ABS_API_KEY')
 
