@@ -29,40 +29,28 @@ from app.data import (
 )
 
 
-def cached_heatmap(
-    asx_codes: Iterable[str],
-    timeframe: Timeframe,
-    data_factory: Callable[[], pd.DataFrame],
-) -> str:
-    key = (
-        "-".join(sorted(asx_codes))
-        + "-"
-        + timeframe.description
-        + "-stocks-sentiment-plot"
-    )
-    return cache_plot(key, lambda: plot_heatmap(data_factory, timeframe))
-
-
 @timing
 def cached_company_versus_sector(
-    stock: str, sector: str, sector_companies, cip: pd.DataFrame
+    stock: str, sector: str, sector_companies, **kwargs
 ) -> str:
-    cache_key = f"{stock}-{sector}-company-versus-sector"
+    assert "cip_df" in kwargs
 
-    def inner():
-        df = make_stock_vs_sector_dataframe(cip, stock, sector_companies)
+    def inner(**kwargs):
+        df = make_stock_vs_sector_dataframe(
+            kwargs.get("cip_df"), stock, sector_companies
+        )
         return plot_company_versus_sector(df, stock, sector) if df is not None else None
 
-    return cache_plot(cache_key, inner)
+    return cache_plot(f"{stock}-{sector}-company-versus-sector", inner, **kwargs)
 
 
 @timing
-def cached_sector_performance(sector: str, sector_companies, cip: pd.DataFrame):
-    def inner():
-        df = make_sector_performance_dataframe(cip, sector_companies)
+def cached_sector_performance(sector: str, sector_companies, **kwargs):
+    def inner(**kwargs):
+        df = make_sector_performance_dataframe(kwargs.get("cip_df"), sector_companies)
         return plot_sector_performance(df, sector) if df is not None else None
 
-    return cache_plot(f"{sector}-sector-performance", inner)
+    return cache_plot(f"{sector}-sector-performance", inner, **kwargs)
 
 
 def cached_portfolio_performance(user):
@@ -473,9 +461,9 @@ def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
     )
 
 
-def plot_breakdown(data_factory: Callable[[], tuple]) -> tuple:
+def plot_breakdown(**kwargs) -> p9.ggplot:
     """Stacked bar plot of increasing and decreasing stocks per sector in the specified df"""
-    cip_df, top10, bottom10 = data_factory()
+    cip_df = kwargs.get("cip_df")
 
     cols_to_drop = [colname for colname in cip_df.columns if colname.startswith("bin_")]
     df = cip_df.drop(columns=cols_to_drop)
@@ -492,7 +480,7 @@ def plot_breakdown(data_factory: Callable[[], tuple]) -> tuple:
     df = df.merge(ss, left_index=True, right_index=True)
 
     if len(df) == 0:  # no stock in cip_df have a sector? ie. ETF?
-        return None, top10, bottom10
+        return None
 
     assert set(df.columns) == set(["sum", "asx_code", "sector_name"])
     df["increasing"] = df.apply(
@@ -504,39 +492,29 @@ def plot_breakdown(data_factory: Callable[[], tuple]) -> tuple:
     sector_names_cat = pd.Categorical(df["sector_name"], categories=sector_names)
     df = df.assign(sector_name_cat=sector_names_cat)
 
-    #print(df)
+    # print(df)
     plot = (
         p9.ggplot(df, p9.aes(x="factor(sector_name_cat)", fill="factor(increasing)"))
         + p9.geom_bar()
         + p9.coord_flip()
     )
-    return (
-        user_theme(
+    return user_theme(
             plot,
             x_axis_label="Sector",
             y_axis_label="Number of stocks",
             subplots_adjust={"left": 0.2, "right": 0.85},
             legend_title=p9.element_blank(),
             asxtrade_want_fill_d=True,
-        ),
-        top10,
-        bottom10,
-    )
+        )
 
 
-def plot_heatmap(
-    data_factory: Callable[
-        [], pd.DataFrame
-    ],  # factory must return a change-in-percent (cip) dataframe eg. see selected_stocks_cip()
-    timeframe: Timeframe,
-    bin_cb=price_change_bins,
-) -> p9.ggplot:
+def plot_heatmap(timeframe: Timeframe, bin_cb=price_change_bins, **kwargs) -> p9.ggplot:
     """
     Plot the specified data matrix as binned values (heatmap) with X axis being dates over the specified timeframe and Y axis being
     the percentage change on the specified date (other metrics may also be used, but you will likely need to adjust the bins)
     :rtype: p9.ggplot instance representing the heatmap
     """
-    df = data_factory()
+    df = kwargs.get("cip_df")
     bins, labels = bin_cb()
     # print(df.columns)
     # print(bins)
@@ -639,12 +617,11 @@ def relative_strength(prices, n=14):
     return rsi
 
 
-def plot_momentum(
-    data_factory: Callable[[], tuple], stock: str, start_date: str
-) -> plt.Figure:
+def plot_momentum(stock: str, timeframe: Timeframe, **kwargs) -> plt.Figure:
     assert len(stock) > 0
-    stock_df, _ = data_factory()
-
+    assert "stock_df" in kwargs
+    start_date = timeframe.earliest_date
+    stock_df = kwargs.get("stock_df")
     last_price = stock_df["last_price"]
     volume = stock_df["volume"]
     day_low_price = stock_df["day_low_price"]
@@ -783,11 +760,12 @@ def plot_momentum(
     return fig
 
 
-def plot_trend(data_factory: Callable[[], tuple], sample_period="M") -> str:
+def plot_trend(sample_period="M", **kwargs) -> str:
     """
     Given a dataframe of a single stock from company_prices() this plots the highest price
     in each month over the time period of the dataframe.
     """
+    assert "stock_df" in kwargs
 
     def inner_date_fmt(dates_to_format):
         results = []
@@ -798,9 +776,9 @@ def plot_trend(data_factory: Callable[[], tuple], sample_period="M") -> str:
             results.append(d.strftime("%Y-%m"))
         return results
 
-    _, dataframe = data_factory()
-    assert dataframe is not None
-    dataframe = dataframe.transpose()
+    stock_df = kwargs.get("stock_df")
+    # print(stock_df)
+    dataframe = stock_df.filter(items=["last_price"])
     dataframe.index = pd.to_datetime(dataframe.index, format="%Y-%m-%d")
     dataframe = dataframe.resample(sample_period).max()
     # print(dataframe)

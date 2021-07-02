@@ -100,7 +100,7 @@ class Timeframe:
         return 0
 
     def __hash__(self):
-        return hash(tuple(self.tf)) ^ hash(self.tf.values())
+        return hash(tuple(self.tf.keys())) ^ hash(tuple(self.tf.values()))
 
     def _is_empty_state(self):
         return self.tf == {}
@@ -819,8 +819,9 @@ def impute_missing(df, method="linear"):
         return df
 
 
-@func.lru_cache(maxsize=1)
-def all_etfs():
+@timing
+@func.ttl_cache(maxsize=1)
+def all_etfs() -> set:
     etf_codes = set()
     for security in Security.objects.all():
         sname = security.security_name.lower()
@@ -890,24 +891,6 @@ def get_required_tags(all_dates, fields):
 
 def first_arg_only(*args):
     return keys.hashkey(args[0])
-
-
-def rsi_data(stock: str, timeframe: Timeframe):
-    stock_df = company_prices(
-        [stock],
-        timeframe,
-        fields=["last_price", "volume", "day_low_price", "day_high_price"],
-        missing_cb=None,
-    )
-    n_dates = len(stock_df)
-    if (
-        n_dates < 14
-    ):  # RSI requires at least 14 prices to plot so reject recently added stocks
-        raise Http404(
-            "Insufficient price quotes for {} - only {}".format(stock, n_dates)
-        )
-    # print(stock_df)
-    return stock_df
 
 
 @timing
@@ -1081,7 +1064,7 @@ def user_purchases(user):
     return purchases
 
 
-@func.lru_cache(maxsize=100)
+@func.ttl_cache(maxsize=100)
 def get_parquet(tag: str) -> pd.DataFrame:
     """
     This function is reserved for the viewer app: other apps have a similar function which use

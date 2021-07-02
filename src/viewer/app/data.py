@@ -7,14 +7,13 @@ from datetime import datetime
 import io
 import re
 import hashlib
-from typing import Iterable
+from typing import Iterable, Callable
 import math
 import numpy as np
 import pandas as pd
 from cachetools import func
 from app.models import (
     companies_with_same_sector,
-    day_low_high,
     Timeframe,
     company_prices,
     validate_date,
@@ -44,16 +43,18 @@ exclusive_lock = Lock()
 
 def cache_plot(
     key: str,
-    plot_factory=None,
-    debug=True,
-    timeout=120.0 * 60,
+    plot_factory: Callable = None,
+    debug: bool = False,
+    timeout: float = 120.0 * 60,
     django_cache=None,
-    dont_cache=False,
+    dont_cache: bool = False,
+    **kwargs,
 ) -> str:
     """
     Using the specified key compute try to find a suitable dynamic image via diskcache. If not found plot_factory() is invoked
     to compute the image. Cache retrieval is disabled if dont_cache is True (useful for debugging). Dynamic images are cached for 120mins by default.
     """
+    assert timeout > 0.0
     global exclusive_lock
     assert exclusive_lock is not None
     assert plot_factory is not None
@@ -84,7 +85,7 @@ def cache_plot(
 
         # TODO FIXME... thread safety and proper locking for this code
         with io.BytesIO(bytearray(200 * 1024)) as buf:
-            plot = plot_factory()
+            plot = plot_factory(**kwargs)
             if plot is None:
                 django_cache.delete(cache_key)
                 return None
@@ -320,12 +321,13 @@ def make_stock_vs_sector_dataframe(
 def make_point_score_dataframe(
     stock: str,
     sector_companies: Iterable[str],
-    cip: pd.DataFrame,
     rules: Iterable[tuple],
+    **kwargs,
 ) -> tuple:
     rows = []
     points = 0
-    day_low_high_df = day_low_high(stock, all_dates=cip.columns)
+    day_low_high_df = kwargs.get("stock_df")
+    cip = kwargs.get("cip_df")
     state = {
         "day_low_high_df": day_low_high_df,  # never changes each day, so we init it here
         "all_stocks_change_in_percent_df": cip,
