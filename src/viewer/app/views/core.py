@@ -12,6 +12,7 @@ from typing import Callable, Iterable
 import plotnine as p9
 import pandas as pd
 import numpy as np
+from lazydict import LazyDictionary
 from app.models import (
     Timeframe,
     timing,
@@ -31,6 +32,7 @@ from app.models import (
 from app.messages import info, warning, add_messages
 from app.plots import plot_heatmap, plot_breakdown, user_theme
 from app.data import cache_plot
+from plotnine.layer import Layers
 
 
 @login_required
@@ -133,7 +135,9 @@ def show_companies(
     sum_by_company = cip.sum(axis=1)
     top10 = sum_by_company.nlargest(n_top_bottom)
     bottom10 = sum_by_company.nsmallest(n_top_bottom)
-    kwargs = {"cip_df": cip}
+
+    ld = LazyDictionary()
+    ld["cip_df"] = cip
 
     if len(asx_codes) <= 0:
         warning(request, "No matching companies found.")
@@ -141,17 +145,17 @@ def show_companies(
         sorted_codes = "-".join(sorted(asx_codes))
         sentiment_heatmap_uri = cache_plot(
             f"{sorted_codes}-{sentiment_timeframe.description}-stocks-sentiment-plot",
-            lambda **kwargs: plot_heatmap(sentiment_timeframe, **kwargs),
-            **kwargs,
+            lambda ld: plot_heatmap(sentiment_timeframe, ld),
+            datasets=ld,
         )
 
         key = f"{sorted_codes}-{sentiment_timeframe.description}-breakdown-plot"
-        sector_breakdown_uri = cache_plot(key, plot_breakdown, **kwargs)
+        sector_breakdown_uri = cache_plot(key, plot_breakdown, datasets=ld)
 
         def plot_cumulative_returns(
-            wanted_stocks: Iterable[str], **kwargs
+            wanted_stocks: Iterable[str], ld: LazyDictionary
         ) -> p9.ggplot:
-            df = kwargs.get("cip_df")
+            df = ld["cip_df"]
             df = (
                 df.filter(wanted_stocks, axis=0)
                 .filter(regex="^\d", axis=1)
@@ -191,13 +195,13 @@ def show_companies(
 
         top10_plot_uri = cache_plot(
             f"top10-plot-{'-'.join(top10.index)}",
-            lambda **kwargs: plot_cumulative_returns(top10.index, **kwargs),
-            **kwargs,
+            lambda ld: plot_cumulative_returns(top10.index, ld),
+            datasets=ld,
         )
         bottom10_plot_uri = cache_plot(
             f"bottom10-plot-{'-'.join(bottom10.index)}",
-            lambda **kwargs: plot_cumulative_returns(bottom10.index, **kwargs),
-            **kwargs,
+            lambda ld: plot_cumulative_returns(bottom10.index, ld),
+            datasets=ld,
         )
 
         context.update(

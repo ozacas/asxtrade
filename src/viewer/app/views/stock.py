@@ -7,6 +7,7 @@ import plotnine as p9
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.http import Http404
+from lazydict import LazyDictionary
 from app.models import (
     latest_quote,
     Quotation,
@@ -30,65 +31,34 @@ from app.analysis import (
     calculate_trends,
 )
 from app.messages import warning
-from app.data import cache_plot, make_point_score_dataframe, label_shorten, pe_trends_df
+from app.data import (
+    cache_plot,
+    make_point_score_dataframe,
+    label_shorten,
+    pe_trends_df,
+    make_stock_vs_sector_dataframe,
+)
 from app.plots import (
     user_theme,
-    plot_point_scores,
     plot_points_by_rule,
     plot_fundamentals,
     plot_momentum,
     plot_trend,
+    plot_series,
     plot_monthly_returns,
     plot_company_rank,
     cached_portfolio_performance,
-    cached_company_versus_sector,
+    plot_company_versus_sector,
 )
 from plotnine.guides.guide_colorbar import guide_colorbar
 
 
 @timing
-def make_stock_sector(timeframe: Timeframe, stock: str, **kwargs) -> dict:
-    sector_companies = companies_with_same_sector(stock)
-    sector = stock_info(stock).get("sector_name", "")
-
-    # implement caching (in memory) at image level to avoid all data manipulation if at all possible
-    c_vs_s_plot = cached_company_versus_sector(
-        stock, sector, sector_companies, **kwargs
-    )
-
-    # invoke separate function to cache the calls when we can
-    point_score_plot = net_rule_contributors_plot = None
-    if len(sector_companies) > 0:
-        df, net_points_by_rule = make_point_score_dataframe(
-            stock, sector_companies, default_point_score_rules(), **kwargs
-        )
-        ps_cache_key = f"{timeframe.description}-{stock}-point-score-plot"
-        np_cache_key = f"{timeframe.description}-{stock}-rules-by-points"
-        point_score_plot = plot_point_scores(ps_cache_key, df)
-        net_rule_contributors_plot = plot_points_by_rule(
-            np_cache_key, net_points_by_rule
-        )
-
-    return {
-        "timeframe": timeframe,
-        "company_versus_sector": {
-            "plot_uri": c_vs_s_plot,
-            "title": "Performance against sector",
-        },
-        "point_score": {
-            "plot_uri": point_score_plot,
-            "title": "Points score due to price movements",
-        },
-        "net_contributors": {
-            "plot_uri": net_rule_contributors_plot,
-            "title": "Contributions to point score by rule",
-        },
-    }
-
-
-def make_fundamentals(timeframe: Timeframe, stock: str, **kwargs) -> dict:
+def fundamentals_dataframe(
+    timeframe: Timeframe, stock: str, ld: LazyDictionary
+) -> pd.DataFrame:
     """Return a dict of the fundamentals plots for the current django template render to use"""
-    df = kwargs.get("stock_df")
+    df = ld["stock_df"]
     # print(df)
     df["change_in_percent_cumulative"] = df[
         "change_in_percent"
@@ -106,15 +76,7 @@ def make_fundamentals(timeframe: Timeframe, stock: str, **kwargs) -> dict:
     # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
     #    print(df)
     df["fetch_date"] = pd.to_datetime(df.index, format="%Y-%m-%d")
-
-    return {
-        "plot_uri": cache_plot(
-            f"{stock}-{timeframe.description}-fundamentals-plot",
-            lambda **kwargs: plot_fundamentals(df, stock),
-        ),
-        "title": "Stock fundamentals: EPS, PE, DY etc.",
-        "timeframe": timeframe,
-    }
+    return df
 
 
 @login_required
@@ -220,49 +182,82 @@ def show_stock(request, stock=None, n_days=2 * 365):
     validate_stock(stock)
     validate_user(request.user)
     plot_timeframe = Timeframe(past_n_days=n_days)  # for template
-    momentum_timeframe = Timeframe(past_n_days=n_days + 200)  # to warmup MA200 function
-    df = company_prices(
-        [stock],
-        momentum_timeframe,
-        fields=(
-            "eps",
-            "volume",
-            "last_price",
-            "annual_dividend_yield",
-            "pe",
-            "change_in_percent",
-            "change_price",
-            "market_cap",
-            "number_of_shares",
-            "day_low_price",
-            "day_high_price",
-        ),
-        missing_cb=None,
-    )
-    cip_df = cached_all_stocks_cip(plot_timeframe)
+
+    def dataframe(ld: LazyDictionary) -> pd.DataFrame:
+        momentum_timeframe = Timeframe(
+            past_n_days=n_days + 200
+        )  # to warmup MA200 function
+        df = company_prices(
+            [stock],
+            momentum_timeframe,
+            fields=(
+                "eps",
+                "volume",
+                "last_price",
+                "annual_dividend_yield",
+                "pe",
+                "change_in_percent",
+                "change_price",
+                "market_cap",
+                "number_of_shares",
+                "day_low_price",
+                "day_high_price",
+            ),
+            missing_cb=None,
+        )
+        return df
 
     # key dynamic images and text for HTML response. We only compute the required data if image(s) not cached
-    company_details = stock_info(stock, lambda msg: warning(request, msg))
     # print(df)
-    kwargs = {
-        "stock_df": df.filter(items=plot_timeframe.all_dates(), axis="rows"),
-        "cip_df": cip_df,
-        "stock_df_200": df,
-    }
+    ld = LazyDictionary()
+    ld["stock_df"] = lambda ld: ld["stock_df_200"].filter(
+        items=plot_timeframe.all_dates(), axis="rows"
+    )
+    ld["cip_df"] = lambda: cached_all_stocks_cip(plot_timeframe)
+    ld["stock_df_200"] = lambda ld: dataframe(ld)
+    ld["sector_companies"] = lambda: companies_with_same_sector(stock)
+    ld["company_details"] = lambda: stock_info(stock, lambda msg: warning(request, msg))
+    ld["sector"] = lambda ld: ld["company_details"].get("sector_name", "")
+    # point_score_results is a tuple (point_score_df, net_points_by_rule)
+    ld["point_score_results"] = lambda ld: make_point_score_dataframe(
+        stock, default_point_score_rules(), ld
+    )
+    ld["stock_vs_sector_df"] = lambda ld: make_stock_vs_sector_dataframe(
+        ld["cip_df"], stock, ld["sector_companies"]
+    )
+
     momentum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-rsi-plot",
-        lambda **kwargs: plot_momentum(stock, plot_timeframe, **kwargs),
-        **kwargs,
+        lambda ld: plot_momentum(stock, plot_timeframe, ld),
+        datasets=ld,
     )
     monthly_maximum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-monthly-maximum-plot",
-        lambda **kwargs: plot_trend(sample_period="M", **kwargs),
-        **kwargs,
+        lambda ld: plot_trend("M", ld),
+        datasets=ld,
     )
     monthly_returns_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-monthly returns",
-        lambda **kwargs: plot_monthly_returns(plot_timeframe, stock, **kwargs),
-        **kwargs,
+        lambda ld: plot_monthly_returns(plot_timeframe, stock, ld),
+        datasets=ld,
+    )
+    company_versus_sector_plot = cache_plot(
+        f"{stock}-{ld['sector']}-company-versus-sector",
+        lambda ld: plot_company_versus_sector(
+            ld["stock_vs_sector_df"], stock, ld["sector"]
+        ),
+        datasets=ld,
+    )
+
+    point_score_plot = cache_plot(
+        f"{plot_timeframe.description}-{stock}-point-score-plot",
+        lambda ld: plot_series(ld["point_score_results"][0], x="date", y="points"),
+        datasets=ld,
+    )
+    net_rule_contributors_plot = cache_plot(
+        f"{plot_timeframe.description}-{stock}-rules-by-points",
+        lambda ld: plot_points_by_rule(ld["point_score_results"][1]),
+        datasets=ld,
     )
 
     # populate template and render HTML page with context
@@ -270,7 +265,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
         "asx_code": stock,
         "watched": user_watchlist(request.user),
         "timeframe": plot_timeframe,
-        "information": company_details,
+        "information": ld["company_details"],
         "momentum": {
             "rsi_plot": momentum_plot,
             "monthly_highest_price": {
@@ -278,8 +273,31 @@ def show_stock(request, stock=None, n_days=2 * 365):
                 "plot_uri": monthly_maximum_plot,
             },
         },
-        "fundamentals": make_fundamentals(plot_timeframe, stock, **kwargs),
-        "stock_vs_sector": make_stock_sector(plot_timeframe, stock, **kwargs),
+        "fundamentals": {
+            "plot_uri": cache_plot(
+                f"{stock}-{plot_timeframe.description}-fundamentals-plot",
+                lambda ld: plot_fundamentals(
+                    fundamentals_dataframe(plot_timeframe, stock, ld),
+                    stock,
+                ),
+                datasets=ld,
+            ),
+            "title": "Stock fundamentals: EPS, PE, DY etc.",
+            "timeframe": plot_timeframe,
+        },
+        "stock_vs_sector": {
+            "plot_uri": company_versus_sector_plot,
+            "title": "Company versus sector - percentage change",
+            "timeframe": plot_timeframe,
+        },
+        "point_score": {
+            "plot_uri": point_score_plot,
+            "title": "Points score due to price movements",
+        },
+        "net_contributors": {
+            "plot_uri": net_rule_contributors_plot,
+            "title": "Contributions to point score by rule",
+        },
         "month_by_month_return_uri": monthly_returns_plot,
     }
     return render(request, "stock_page.html", context=context)

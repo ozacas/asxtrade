@@ -7,11 +7,12 @@ from datetime import datetime
 import io
 import re
 import hashlib
-from typing import Iterable, Callable
+from typing import Any, Iterable, Callable
 import math
 import numpy as np
 import pandas as pd
 from cachetools import func
+from lazydict import LazyDictionary
 from app.models import (
     companies_with_same_sector,
     Timeframe,
@@ -48,9 +49,9 @@ def cache_plot(
     plot_factory: Callable = None,
     debug: bool = False,
     timeout: float = 120.0 * 60,
+    datasets: LazyDictionary = None,
     django_cache=None,
     dont_cache: bool = False,
-    **kwargs,
 ) -> str:
     """
     Using the specified key compute try to find a suitable dynamic image via diskcache. If not found plot_factory() is invoked
@@ -87,7 +88,7 @@ def cache_plot(
 
         # TODO FIXME... thread safety and proper locking for this code
         with io.BytesIO(bytearray(200 * 1024)) as buf:
-            plot = plot_factory(**kwargs)
+            plot = plot_factory(datasets)
             if plot is None:
                 django_cache.delete(cache_key)
                 return None
@@ -289,6 +290,7 @@ def prep_cip_dataframe(
 def make_stock_vs_sector_dataframe(
     all_stocks_cip: pd.DataFrame, stock: str, sector_companies=None
 ) -> pd.DataFrame:
+    # print(all_stocks_cip)
     cip = prep_cip_dataframe(all_stocks_cip, stock, sector_companies)
     if cip is None:
         return None
@@ -322,14 +324,17 @@ def make_stock_vs_sector_dataframe(
 
 def make_point_score_dataframe(
     stock: str,
-    sector_companies: Iterable[str],
     rules: Iterable[tuple],
-    **kwargs,
+    ld: LazyDictionary,
 ) -> tuple:
+    sector_companies = ld["sector_companies"]
+    if len(sector_companies) < 1:
+        return None, None
+
     rows = []
     points = 0
-    day_low_high_df = kwargs.get("stock_df")
-    cip = kwargs.get("cip_df")
+    day_low_high_df = ld["stock_df"]
+    cip = ld["cip_df"]
     state = {
         "day_low_high_df": day_low_high_df,  # never changes each day, so we init it here
         "all_stocks_change_in_percent_df": cip,

@@ -11,6 +11,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import plotnine as p9
+from lazydict import LazyDictionary
 from django.contrib.auth import get_user_model
 from app.models import (
     stocks_by_sector,
@@ -27,21 +28,7 @@ from app.data import (
     make_portfolio_performance_dataframe,
     price_change_bins,
 )
-
-
-@timing
-def cached_company_versus_sector(
-    stock: str, sector: str, sector_companies, **kwargs
-) -> str:
-    assert "cip_df" in kwargs
-
-    def inner(**kwargs):
-        df = make_stock_vs_sector_dataframe(
-            kwargs.get("cip_df"), stock, sector_companies
-        )
-        return plot_company_versus_sector(df, stock, sector) if df is not None else None
-
-    return cache_plot(f"{stock}-{sector}-company-versus-sector", inner, **kwargs)
+from plotnine.layer import Layers
 
 
 @timing
@@ -167,6 +154,7 @@ def make_sentiment_plot(sentiment_df, exclude_zero_bin=True, plot_text_labels=Tr
     return user_theme(plot, y_axis_label="Daily change (%)")
 
 
+@timing
 def plot_fundamentals(
     df: pd.DataFrame, stock: str, line_size=1.5  # pylint: disable=unused-argument
 ) -> str:
@@ -258,12 +246,6 @@ def plot_portfolio_contributors(
     )
 
 
-def plot_price_trend(data_factory: Callable) -> p9.ggplot:
-    df = data_factory()
-    print(df)
-    return None
-
-
 def plot_portfolio_stock_performance(
     data_factory: Callable[[], pd.DataFrame], figure_width: int = 12, date_text_size=7
 ) -> p9.ggplot:
@@ -276,7 +258,7 @@ def plot_portfolio_stock_performance(
     # print(df)
     pivoted_df = df.pivot(index="stock", columns="date", values="stock_profit")
     latest_date = pivoted_df.columns[-1]
-    print(latest_date)
+    #print(latest_date)
     mean_profit = pivoted_df.mean(axis=1)
     n_stocks = len(mean_profit)
     # if we want ~4 stocks per facet plot, then we need to specify the appropriate calculation for df.qcut()
@@ -461,9 +443,9 @@ def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
     )
 
 
-def plot_breakdown(**kwargs) -> p9.ggplot:
+def plot_breakdown(ld: LazyDictionary) -> p9.ggplot:
     """Stacked bar plot of increasing and decreasing stocks per sector in the specified df"""
-    cip_df = kwargs.get("cip_df")
+    cip_df = ld["cip_df"]
 
     cols_to_drop = [colname for colname in cip_df.columns if colname.startswith("bin_")]
     df = cip_df.drop(columns=cols_to_drop)
@@ -508,13 +490,15 @@ def plot_breakdown(**kwargs) -> p9.ggplot:
     )
 
 
-def plot_heatmap(timeframe: Timeframe, bin_cb=price_change_bins, **kwargs) -> p9.ggplot:
+def plot_heatmap(
+    timeframe: Timeframe, ld: LazyDictionary, bin_cb=price_change_bins
+) -> p9.ggplot:
     """
     Plot the specified data matrix as binned values (heatmap) with X axis being dates over the specified timeframe and Y axis being
     the percentage change on the specified date (other metrics may also be used, but you will likely need to adjust the bins)
     :rtype: p9.ggplot instance representing the heatmap
     """
-    df = kwargs.get("cip_df")
+    df = ld["cip_df"]
     bins, labels = bin_cb()
     # print(df.columns)
     # print(bins)
@@ -618,15 +602,11 @@ def relative_strength(prices, n=14):
 
 
 @timing
-def plot_momentum(stock: str, timeframe: Timeframe, **kwargs) -> plt.Figure:
+def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.Figure:
     assert len(stock) > 0
-    assert "stock_df" in kwargs or "stock_df_200" in kwargs
+    assert "stock_df" in ld or "stock_df_200" in ld
     start_date = timeframe.earliest_date
-    stock_df = (
-        kwargs.get("stock_df_200")
-        if "stock_df_200" in kwargs
-        else kwargs.get("stock_df")
-    )
+    stock_df = ld["stock_df_200"] if "stock_df_200" in ld else ld["stock_df"]
     last_price = stock_df["last_price"]
     volume = stock_df["volume"]
     day_low_price = stock_df["day_low_price"]
@@ -766,12 +746,12 @@ def plot_momentum(stock: str, timeframe: Timeframe, **kwargs) -> plt.Figure:
 
 
 @timing
-def plot_trend(sample_period="M", **kwargs) -> str:
+def plot_trend(sample_period="M", ld: LazyDictionary = None) -> str:
     """
     Given a dataframe of a single stock from company_prices() this plots the highest price
     in each month over the time period of the dataframe.
     """
-    assert "stock_df" in kwargs
+    assert "stock_df" in ld
 
     def inner_date_fmt(dates_to_format):
         results = []
@@ -782,7 +762,7 @@ def plot_trend(sample_period="M", **kwargs) -> str:
             results.append(d.strftime("%Y-%m"))
         return results
 
-    stock_df = kwargs.get("stock_df")
+    stock_df = ld["stock_df"]
     # print(stock_df)
     dataframe = stock_df.filter(items=["last_price"])
     dataframe.index = pd.to_datetime(dataframe.index, format="%Y-%m-%d")
@@ -803,37 +783,23 @@ def plot_trend(sample_period="M", **kwargs) -> str:
     return user_theme(plot, y_axis_label="$ AUD", asxtrade_want_fill_continuous=True)
 
 
-def plot_point_scores(cache_key: str, point_score_dataframe: pd.DataFrame) -> str:
-    """
-    Visualise the stock in terms of point scores as described on the stock view page.
-    :param: point_score_dataframe result from call to make_point_score_dataframe() ie. ready to plot DataFrame
-    :rtype: string for accessing the plot via the Django cache
-    """
-    return cache_plot(
-        cache_key, lambda: plot_series(point_score_dataframe, x="date", y="points")
+def plot_points_by_rule(net_points_by_rule: defaultdict(int)) -> p9.ggplot:
+    rows = []
+    for k, v in net_points_by_rule.items():
+        rows.append({"rule": str(k), "net_points": v})
+    df = pd.DataFrame.from_records(rows)
+    plot = (
+        p9.ggplot(df, p9.aes(x="rule", y="net_points", fill="net_points"))
+        + p9.geom_bar(stat="identity", alpha=0.7)
+        + p9.coord_flip()
     )
-
-
-def plot_points_by_rule(cache_key: str, net_points_by_rule: defaultdict(int)) -> str:
-    def inner():
-        rows = []
-        for k, v in net_points_by_rule.items():
-            rows.append({"rule": str(k), "net_points": v})
-        df = pd.DataFrame.from_records(rows)
-        plot = (
-            p9.ggplot(df, p9.aes(x="rule", y="net_points", fill="net_points"))
-            + p9.geom_bar(stat="identity", alpha=0.7)
-            + p9.coord_flip()
-        )
-        return user_theme(
-            plot,
-            x_axis_label="Rule",
-            y_axis_label="Contributions to points by rule",
-            subplots_adjust={"left": 0.2},
-            asxtrade_want_fill_continuous=True,
-        )
-
-    return cache_plot(cache_key, inner)
+    return user_theme(
+        plot,
+        x_axis_label="Rule",
+        y_axis_label="Contributions to points by rule",
+        subplots_adjust={"left": 0.2},
+        asxtrade_want_fill_continuous=True,
+    )
 
 
 def plot_boxplot_series(df, normalisation_method=None):
@@ -933,11 +899,13 @@ def plot_sector_top_eps_contributors(
     )
 
 
-def plot_monthly_returns(timeframe: Timeframe, stock: str, **kwargs) -> p9.ggplot:
+def plot_monthly_returns(
+    timeframe: Timeframe, stock: str, ld: LazyDictionary
+) -> p9.ggplot:
     start = timeframe.earliest_date
     end = timeframe.most_recent_date
     dt = pd.date_range(start, end, freq="BMS")
-    df = kwargs.get("stock_df")
+    df = ld["stock_df"]
     # print(df)
     df = df.filter([d.strftime("%Y-%m-%d") for d in dt], axis=0)
     df["percentage_change"] = df["last_price"].pct_change(periods=1) * 100.0
