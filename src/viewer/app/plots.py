@@ -10,6 +10,7 @@ import pandas as pd
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
+from pandas.core.base import NoNewAttributesMixin
 import plotnine as p9
 from lazydict import LazyDictionary
 from django.contrib.auth import get_user_model
@@ -258,7 +259,7 @@ def plot_portfolio_stock_performance(
     # print(df)
     pivoted_df = df.pivot(index="stock", columns="date", values="stock_profit")
     latest_date = pivoted_df.columns[-1]
-    #print(latest_date)
+    # print(latest_date)
     mean_profit = pivoted_df.mean(axis=1)
     n_stocks = len(mean_profit)
     # if we want ~4 stocks per facet plot, then we need to specify the appropriate calculation for df.qcut()
@@ -321,6 +322,10 @@ def plot_company_rank(data_factory: Callable[[], tuple]) -> p9.ggplot:
 def plot_company_versus_sector(
     df: pd.DataFrame, stock: str, sector: str  # pylint: disable=unused-argument
 ) -> str:
+    if df is None or len(df) < 1:
+        print("No data for stock vs. sector plot... ignored")
+        return None
+
     df["date"] = pd.to_datetime(df["date"])
     # print(df)
     plot = p9.ggplot(
@@ -403,7 +408,9 @@ def plot_series(
     color="stock",
     use_smooth_line=False,
 ):
-    assert len(df) > 0
+    if df is None or len(df) < 1:
+        return None
+
     assert len(x) > 0 and len(y) > 0
     assert line_size > 0.0
     assert isinstance(tick_text_size, int) and tick_text_size > 0
@@ -784,6 +791,9 @@ def plot_trend(sample_period="M", ld: LazyDictionary = None) -> str:
 
 
 def plot_points_by_rule(net_points_by_rule: defaultdict(int)) -> p9.ggplot:
+    if net_points_by_rule is None or len(net_points_by_rule) < 1:
+        return None
+
     rows = []
     for k, v in net_points_by_rule.items():
         rows.append({"rule": str(k), "net_points": v})

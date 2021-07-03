@@ -83,23 +83,39 @@ def fundamentals_dataframe(
 def show_financial_metrics(request, stock=None):
     validate_user(request.user)
     validate_stock(stock)
-    data_df = financial_metrics(stock)
-    if data_df is None or len(data_df) < 1:
-        raise Http404(f"No financial metrics available for {stock}")
 
-    linear_metrics = calculate_trends(data_df)
-    good_linear_metrics = []
-    for k, t in linear_metrics.items():
-        if t[1] < 0.1:
-            good_linear_metrics.append(k)
-    exp_metrics = calculate_trends(data_df, polynomial_degree=3, nrmse_cutoff=0.1)
-    good_exp_metrics = []
-    for k, t in exp_metrics.items():
-        if t[1] < 0.1:
-            good_exp_metrics.append(k)
-    print(
-        f"n_metrics == {len(data_df)} n_trending={len(linear_metrics.keys())} n_good_fit={len(good_linear_metrics)} n_good_exp={len(good_exp_metrics)}"
-    )
+    def data_factory(ld: LazyDictionary):
+        data_df = financial_metrics(stock)
+        if data_df is None or len(data_df) < 1:
+            raise Http404(f"No financial metrics available for {stock}")
+        return data_df
+
+    def find_linear_metrics(ld: LazyDictionary):
+        linear_metrics = calculate_trends(ld["data_df"])
+        good_linear_metrics = []
+        for k, t in linear_metrics.items():
+            if t[1] < 0.1:
+                good_linear_metrics.append(k)
+        return good_linear_metrics
+
+    def find_exp_metrics(ld: LazyDictionary):
+        exp_metrics = calculate_trends(
+            ld["data_df"], polynomial_degree=3, nrmse_cutoff=0.1
+        )
+        good_exp_metrics = []
+        for k, t in exp_metrics.items():
+            if t[1] < 0.1:
+                good_exp_metrics.append(k)
+        return good_exp_metrics
+
+    ld = LazyDictionary()
+    ld["data_df"] = lambda ld: data_factory(ld)
+    ld["linear_metrics"] = lambda ld: find_linear_metrics(ld)
+    ld["exp_metrics"] = lambda ld: find_exp_metrics(ld)
+
+    # print(
+    #     f"n_metrics == {len(data_df)} n_trending={len(linear_metrics.keys())} n_good_fit={len(good_linear_metrics)} n_good_exp={len(good_exp_metrics)}"
+    # )
 
     def plot_metrics(df: pd.DataFrame, use_short_labels=False, **kwargs):
         plot = (
@@ -117,8 +133,8 @@ def show_financial_metrics(request, stock=None):
             **kwargs,
         )
 
-    def linear_trending_metrics():
-        df = data_df.filter(good_linear_metrics, axis=0)
+    def plot_linear_trending_metrics(ld: LazyDictionary):
+        df = ld["data_df"].filter(ld["linear_metrics"], axis=0)
         if len(df) < 1:
             return None
         df["metric"] = df.index
@@ -127,8 +143,8 @@ def show_financial_metrics(request, stock=None):
         plot += p9.facet_wrap("~metric", ncol=1, scales="free_y")
         return plot
 
-    def exponential_growth_metrics():
-        df = data_df.filter(good_exp_metrics, axis=0)
+    def plot_exponential_growth_metrics(ld: LazyDictionary):
+        df = ld["data_df"].filter(ld["exp_metrics"], axis=0)
         if len(df) < 1:
             return None
         df["metric"] = df.index
@@ -138,8 +154,8 @@ def show_financial_metrics(request, stock=None):
 
         return plot
 
-    def inner():
-        df = data_df.filter(["Ebit", "Total Revenue", "Earnings"], axis=0)
+    def plot_earnings_and_revenue(ld: LazyDictionary):
+        df = ld["data_df"].filter(["Ebit", "Total Revenue", "Earnings"], axis=0)
         if len(df) < 2:
             print(f"WARNING: revenue and earnings not availabe for {stock}")
             return None
@@ -153,12 +169,20 @@ def show_financial_metrics(request, stock=None):
         )  # need to show metric name somewhere on plot
         return plot
 
-    er_uri = cache_plot(f"{stock}-earnings-revenue-plot", inner)
+    er_uri = cache_plot(
+        f"{stock}-earnings-revenue-plot",
+        lambda ld: plot_earnings_and_revenue(ld),
+        datasets=ld,
+    )
     trending_metrics_uri = cache_plot(
-        f"{stock}-trending-metrics-plot", linear_trending_metrics
+        f"{stock}-trending-metrics-plot",
+        lambda ld: plot_linear_trending_metrics(ld),
+        datasets=ld,
     )
     exp_growth_metrics_uri = cache_plot(
-        f"{stock}-exponential-growth-metrics-plot", exponential_growth_metrics
+        f"{stock}-exponential-growth-metrics-plot",
+        lambda ld: plot_exponential_growth_metrics(ld),
+        datasets=ld,
     )
     warning(
         request,
@@ -166,7 +190,7 @@ def show_financial_metrics(request, stock=None):
     )
     context = {
         "asx_code": stock,
-        "data": data_df,
+        "data": ld["data_df"],
         "earnings_and_revenue_plot_uri": er_uri,
         "trending_metrics_plot_uri": trending_metrics_uri,
         "exp_growth_metrics_plot_uri": exp_growth_metrics_uri,

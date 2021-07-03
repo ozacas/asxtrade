@@ -1,22 +1,22 @@
 <div class="mt-4">
-     {% if data.company_versus_sector.plot_uri is None %}
+     {% if stock_versus_sector.plot_uri is None %}
      {% else %}
-          <h3>{{ data.company_versus_sector.title }}</h3>
+          <h3>{{ stock_versus_sector.title }}</h3>
 
           <ul>
-               <li>Timeframe: {{ data.timeframe.description }}</li>
+               <li>Timeframe: {{ timeframe.description }}</li>
           </ul>
 
           <img class="company_versus_sector"
-               src="/png/{{ data.company_versus_sector.plot_uri }}"
-               alt="{{ data.company_versus_sector.title }}" />
+               src="/png/{{ stock_versus_sector.plot_uri }}"
+               alt="{{ stock_versus_sector.title }}" />
      {% endif %}
 </div>
 
 <div class="mt-4">
-     {% if data.point_score.plot_uri is None %}
+     {% if point_score.plot_uri is None %}
      {% else %}
-          <h3>{{ data.point_score.title }}</h3>
+          <h3>{{ point_score.title }}</h3>
 
           <p>Visualise the stock using a points system: based on daily change price (percentage). Points are awarded by:</p>
 
@@ -35,20 +35,11 @@
 
           <div class="mt-4">
                <img class="point_score_plot"
-                    src="/png/{{ data.point_score.plot_uri }}"
-                    alt="{{ data.point_score.title }}" />
+                    src="/png/{{ point_score.plot_uri }}"
+                    alt="{{ point_score.title }}" />
                <img class="net_contributors_plot"
-                    src="/png/{{ data.net_contributors.plot_uri }}"
-                    alt="{{ data.net_contributors.title }}" />
+                    src="/png/{{ net_contributors.plot_uri }}"
+                    alt="{{ net_contributors.title }}" />
           </div>
-     {% endif %}
-
-     {% if data.sector_momentum.plot_uri is None %}
-     {% else %}
-          <h3>{{ data.sector_momentum.title }}</h3>
-
-          <img class="sector_momentum_plot"
-               src="/png/{{ data.sector_momentum.plot_uri }}"
-               alt="{{ data.sector_momentum.title }}" />
      {% endif %}
 </div>
