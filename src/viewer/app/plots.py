@@ -339,14 +339,12 @@ def plot_company_versus_sector(
     )
 
 
-def plot_market_wide_sector_performance(
-    data_factory: Callable[[], pd.DataFrame]
-) -> p9.ggplot:
+def plot_market_wide_sector_performance(ld: LazyDictionary) -> p9.ggplot:
     """
     Display specified dates for average sector performance. Each company is assumed to have at zero
     at the start of the observation period. A plot as base64 data is returned.
     """
-    all_stocks_cip = data_factory()
+    all_stocks_cip = ld["sector_df"]
     n_stocks = len(all_stocks_cip)
     # merge in sector information for each company
     code_and_sector = stocks_by_sector()
@@ -433,8 +431,8 @@ def plot_series(
     )
 
 
-def plot_market_cap_distribution(data_factory: Callable[[], pd.DataFrame]):
-    df = data_factory()
+def plot_market_cap_distribution(ld: LazyDictionary) -> p9.ggplot:
+    df = ld["market_cap_df"]
     assert set(df.columns).intersection(set(["market", "market_cap", "bin"])) == set(
         ["market", "market_cap", "bin"]
     )
