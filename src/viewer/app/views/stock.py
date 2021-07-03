@@ -38,10 +38,9 @@ from app.plots import (
     plot_fundamentals,
     plot_momentum,
     plot_trend,
-    plot_price_trend,
+    plot_monthly_returns,
     plot_company_rank,
     cached_portfolio_performance,
-    cached_sector_performance,
     cached_company_versus_sector,
 )
 from plotnine.guides.guide_colorbar import guide_colorbar
@@ -213,31 +212,6 @@ def show_financial_metrics(request, stock=None):
     return render(request, "stock_financial_metrics.html", context=context)
 
 
-def plot_monthly_returns(timeframe: Timeframe, stock: str) -> p9.ggplot:
-    start = timeframe.earliest_date
-    end = timeframe.most_recent_date
-    dt = pd.date_range(start, end, freq="BMS")
-    # print(dt)
-    quotes = [
-        Quotation.objects.filter(fetch_date=quote_date.strftime("%Y-%m-%d"))
-        .filter(asx_code=stock)
-        .first()
-        for quote_date in dt
-    ]
-    last_prices = [q.last_price if q is not None else float("nan") for q in quotes]
-    df = pd.Series(last_prices).to_frame(name="last_price")
-    df.index = dt
-    df["percentage_change"] = df["last_price"].pct_change(periods=1) * 100.0
-    # print(df)
-
-    plot = p9.ggplot(
-        df, p9.aes(x="df.index", y="percentage_change", fill="percentage_change")
-    ) + p9.geom_bar(stat="identity")
-    return user_theme(
-        plot, asxtrade_want_cmap_d=False, asxtrade_want_fill_continuous=True
-    )
-
-
 @login_required
 def show_stock(request, stock=None, n_days=2 * 365):
     """
@@ -246,9 +220,10 @@ def show_stock(request, stock=None, n_days=2 * 365):
     validate_stock(stock)
     validate_user(request.user)
     plot_timeframe = Timeframe(past_n_days=n_days)  # for template
+    momentum_timeframe = Timeframe(past_n_days=n_days + 200)  # to warmup MA200 function
     df = company_prices(
         [stock],
-        plot_timeframe,
+        momentum_timeframe,
         fields=(
             "eps",
             "volume",
@@ -268,7 +243,12 @@ def show_stock(request, stock=None, n_days=2 * 365):
 
     # key dynamic images and text for HTML response. We only compute the required data if image(s) not cached
     company_details = stock_info(stock, lambda msg: warning(request, msg))
-    kwargs = {"stock_df": df, "cip_df": cip_df}
+    # print(df)
+    kwargs = {
+        "stock_df": df.filter(items=plot_timeframe.all_dates(), axis="rows"),
+        "cip_df": cip_df,
+        "stock_df_200": df,
+    }
     momentum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-rsi-plot",
         lambda **kwargs: plot_momentum(stock, plot_timeframe, **kwargs),
@@ -281,7 +261,8 @@ def show_stock(request, stock=None, n_days=2 * 365):
     )
     monthly_returns_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-monthly returns",
-        lambda **kwargs: plot_monthly_returns(plot_timeframe, stock),
+        lambda **kwargs: plot_monthly_returns(plot_timeframe, stock, **kwargs),
+        **kwargs,
     )
 
     # populate template and render HTML page with context

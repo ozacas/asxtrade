@@ -499,13 +499,13 @@ def plot_breakdown(**kwargs) -> p9.ggplot:
         + p9.coord_flip()
     )
     return user_theme(
-            plot,
-            x_axis_label="Sector",
-            y_axis_label="Number of stocks",
-            subplots_adjust={"left": 0.2, "right": 0.85},
-            legend_title=p9.element_blank(),
-            asxtrade_want_fill_d=True,
-        )
+        plot,
+        x_axis_label="Sector",
+        y_axis_label="Number of stocks",
+        subplots_adjust={"left": 0.2, "right": 0.85},
+        legend_title=p9.element_blank(),
+        asxtrade_want_fill_d=True,
+    )
 
 
 def plot_heatmap(timeframe: Timeframe, bin_cb=price_change_bins, **kwargs) -> p9.ggplot:
@@ -617,11 +617,16 @@ def relative_strength(prices, n=14):
     return rsi
 
 
+@timing
 def plot_momentum(stock: str, timeframe: Timeframe, **kwargs) -> plt.Figure:
     assert len(stock) > 0
-    assert "stock_df" in kwargs
+    assert "stock_df" in kwargs or "stock_df_200" in kwargs
     start_date = timeframe.earliest_date
-    stock_df = kwargs.get("stock_df")
+    stock_df = (
+        kwargs.get("stock_df_200")
+        if "stock_df_200" in kwargs
+        else kwargs.get("stock_df")
+    )
     last_price = stock_df["last_price"]
     volume = stock_df["volume"]
     day_low_price = stock_df["day_low_price"]
@@ -760,6 +765,7 @@ def plot_momentum(stock: str, timeframe: Timeframe, **kwargs) -> plt.Figure:
     return fig
 
 
+@timing
 def plot_trend(sample_period="M", **kwargs) -> str:
     """
     Given a dataframe of a single stock from company_prices() this plots the highest price
@@ -924,4 +930,23 @@ def plot_sector_top_eps_contributors(
         figure_size=(12, int(n_sectors * 1.5)),
         asxtrade_want_cmap_d=False,
         asxtrade_want_fill_d=True,
+    )
+
+
+def plot_monthly_returns(timeframe: Timeframe, stock: str, **kwargs) -> p9.ggplot:
+    start = timeframe.earliest_date
+    end = timeframe.most_recent_date
+    dt = pd.date_range(start, end, freq="BMS")
+    df = kwargs.get("stock_df")
+    # print(df)
+    df = df.filter([d.strftime("%Y-%m-%d") for d in dt], axis=0)
+    df["percentage_change"] = df["last_price"].pct_change(periods=1) * 100.0
+    df.index = pd.to_datetime(df.index, format="%Y-%m-%d")
+    # print(df)
+
+    plot = p9.ggplot(
+        df, p9.aes(x="df.index", y="percentage_change", fill="percentage_change")
+    ) + p9.geom_bar(stat="identity")
+    return user_theme(
+        plot, asxtrade_want_cmap_d=False, asxtrade_want_fill_continuous=True
     )

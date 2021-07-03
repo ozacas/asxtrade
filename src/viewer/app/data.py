@@ -18,6 +18,7 @@ from app.models import (
     company_prices,
     validate_date,
     VirtualPurchase,
+    timing,
 )
 from django.core.cache import cache
 import plotnine as p9
@@ -41,6 +42,7 @@ check_hash_collision_dict: dict = {}
 exclusive_lock = Lock()
 
 
+@timing
 def cache_plot(
     key: str,
     plot_factory: Callable = None,

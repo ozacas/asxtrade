@@ -402,6 +402,7 @@ def toggle_watchlist_entry(user, asx_stock):
 
 
 @timing
+@func.lru_cache(maxsize=5)
 def user_watchlist(user):
     """
     Given a user object eg. from find_user() return the set of stock codes which the user
@@ -664,7 +665,6 @@ def find_named_companies(wanted_name, wanted_activity):
     return ret
 
 
-@timing
 @func.lru_cache(maxsize=200)
 def latest_quotation_date(stock, as_tuple=False):
     q = None
