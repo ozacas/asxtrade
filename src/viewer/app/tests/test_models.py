@@ -387,14 +387,18 @@ def test_company_prices(
 def test_toggle_watchlist_entry(
     uw_fixture, django_user_model
 ):  # pylint: disable=unused-argument,redefined-outer-name
+    global watchlist_cache
     u = find_user("u2")
     assert u is not None
     uname = u.username
+    mdl.watchlist_cache.clear()
     assert not is_in_watchlist(uname, "ASX1")
     toggle_watchlist_entry(u, "ASX1")
+    mdl.watchlist_cache.clear()
     assert is_in_watchlist(uname, "ASX1")
     assert not is_in_watchlist(uname, "ASX2")
     toggle_watchlist_entry(u, "ASX2")
+    user_watchlist.cache_clear()
     ret = user_watchlist(u)
     assert "ASX2" in ret
 
