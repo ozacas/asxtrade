@@ -36,6 +36,7 @@ from app.plots import (
     plot_sector_field,
     plot_sector_top_eps_contributors,
 )
+from lazydict import LazyDictionary
 
 
 def bin_market_cap(row):
@@ -161,8 +162,8 @@ def show_pe_trends(request):
     timeframe = Timeframe(past_n_days=180)
     ss = stocks_by_sector()
 
-    def make_pe_trends_market_avg_df() -> pd.DataFrame:
-        df, _ = pe_trends_df(timeframe)
+    def make_pe_trends_market_avg_df(ld: LazyDictionary) -> pd.DataFrame:
+        df = ld["data_df"]
         pe_pos_df, _ = make_pe_trends_positive_pe_df(df, ss)
         market_avg_pe_df = pe_pos_df.mean(axis=0).to_frame(
             name="market_pe"
@@ -170,11 +171,12 @@ def show_pe_trends(request):
         market_avg_pe_df["date"] = pd.to_datetime(market_avg_pe_df.index)
         return market_avg_pe_df
 
-    @func.lru_cache(maxsize=1)
-    def sector_eps_data_factory(timeframe: Timeframe) -> pd.DataFrame:
-        df, n_stocks = pe_trends_df(timeframe)
-        pe_df, positive_pe_stocks = make_pe_trends_positive_pe_df(df, ss)
-        eps_df = make_pe_trends_eps_df(df)
+    def sector_eps_data_factory(ld: LazyDictionary) -> pd.DataFrame:
+        df = ld["data_df"]
+        n_stocks = df["asx_code"].nunique()
+        pe_df, positive_pe_stocks = ld["positive_pe_tuple"]
+        eps_df = ld["eps_df"]
+
         # print(positive_pe_stocks)
         eps_stocks = set(eps_df.index)
         ss_dict = {row.asx_code: row.sector_name for row in ss.itertuples()}
@@ -242,7 +244,14 @@ def show_pe_trends(request):
         # print(df)
         return df
 
-    df, n_stocks = pe_trends_df(timeframe)
+    ld = LazyDictionary()
+    ld["data_df"] = lambda: pe_trends_df(timeframe)
+    ld["positive_pe_tuple"] = lambda ld: make_pe_trends_positive_pe_df(
+        ld["data_df"], ss
+    )
+    ld["market_avg_pe_df"] = lambda ld: make_pe_trends_market_avg_df(ld)
+    ld["eps_df"] = lambda ld: make_pe_trends_eps_df(ld["data_df"])
+    ld["sector_eps_df"] = lambda ld: sector_eps_data_factory(ld)
 
     # these arent per-user plots: they can safely be shared across all users of the site, so the key reflects that
     sector_pe_cache_key = f"{timeframe.description}-by-sector-pe-plot"
@@ -250,40 +259,37 @@ def show_pe_trends(request):
     market_pe_cache_key = f"{timeframe.description}-market-pe-mean"
     market_pe_plot_uri = cache_plot(
         market_pe_cache_key,
-        lambda: plot_series(
-            make_pe_trends_market_avg_df(),
+        lambda ld: plot_series(
+            ld["market_avg_pe_df"],
             x="date",
             y="market_pe",
             y_axis_label="Market-wide mean P/E",
             color=None,
             use_smooth_line=True,
         ),
+        datasets=ld,
     )
-
-    _, positive_pe_stocks = make_pe_trends_positive_pe_df(df, ss)
 
     context = {
         "title": "PE Trends: {}".format(timeframe.description),
-        "n_stocks": n_stocks,
+        "n_stocks": ld["data_df"]["asx_code"].nunique(),
         "timeframe": timeframe,
-        "n_stocks_with_pe": len(positive_pe_stocks),
+        "n_stocks_with_pe": len(ld["positive_pe_tuple"][1]),
         "sector_pe_plot_uri": cache_plot(
             sector_pe_cache_key,
-            lambda: plot_sector_field(
-                sector_eps_data_factory(timeframe), field="mean_pe"
-            ),
+            lambda ld: plot_sector_field(ld["sector_eps_df"], field="mean_pe"),
+            datasets=ld,
         ),
         "sector_eps_plot_uri": cache_plot(
             sector_eps_cache_key,
-            lambda: plot_sector_field(
-                sector_eps_data_factory(timeframe), field="sum_eps"
-            ),
+            lambda ld: plot_sector_field(ld["sector_eps_df"], field="sum_eps"),
+            datasets=ld,
         ),
         "market_pe_plot_uri": market_pe_plot_uri,
         "sector_positive_top_contributors_eps_uri": cache_plot(
             f"top-contributors-{sector_eps_cache_key}",
-            lambda: plot_sector_top_eps_contributors(make_pe_trends_eps_df(df), ss),
-            dont_cache=True,
+            lambda ld: plot_sector_top_eps_contributors(ld["eps_df"], ss),
+            datasets=ld,
         ),
     }
     return render(request, "pe_trends.html", context)

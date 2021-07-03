@@ -427,14 +427,12 @@ def price_change_bins() -> tuple:
 
 
 @func.lru_cache(maxsize=1)
-def pe_trends_df(timeframe: Timeframe) -> tuple:
+def pe_trends_df(timeframe: Timeframe) -> pd.DataFrame:
     # we fetch all required fields for this view in one call to company_prices() - more efficient on DB
     df = company_prices(
         None, timeframe, fields=["pe", "eps", "number_of_shares"], missing_cb=None
     )
-    n_stocks = df["asx_code"].nunique()
-    # NB: cant pivot this df since it has multiple fields for a given stock
-    return df, n_stocks
+    return df
 
 
 def make_pe_trends_eps_df(
@@ -454,7 +452,7 @@ def make_pe_trends_positive_pe_df(
     pe_df = df[df["field_name"] == "pe"].pivot(
         index="asx_code", columns="fetch_date", values="field_value"
     )
-    positive_pe_stocks = set(pe_df[pe_df.mean(axis=1) > 0].index)
+    positive_pe_stocks = set(pe_df[pe_df.mean(axis=1) > 0.0].index)
     # print(positive_pe_stocks)
     # print(pe_df)
     # print(stocks_with_sector)
