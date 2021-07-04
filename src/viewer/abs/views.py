@@ -125,8 +125,7 @@ class ABSHeadlineView(LoginRequiredMixin, FormView):
                 "plot_fixed_datapoints": self.fixed_datapoints,
                 "plot_uri": cache_plot(
                     f"{key}-abs-plot",
-                    lambda: self.plot_abs_dataframe(data_df),
-                    dont_cache=True,
+                    lambda ld: self.plot_abs_dataframe(data_df),
                 ),
             }
         )

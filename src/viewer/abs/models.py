@@ -80,14 +80,16 @@ def update_datapoints(df: pd.DataFrame, dataflow: str) -> None:
     df["idx"] = df.index
     id_cols = set(["time_period", "dataflow", "idx"])
     value_cols = cols.difference(id_cols)
+    ABSHeadlineDataRecord.objects.filter(
+        time_period__in=df["time_period"].unique(), dataflow=dataflow
+    ).delete()
     df = df.melt(id_vars=id_cols, value_vars=value_cols)
     # print(df)
     n = 0
-    for d in df.to_dict("records"):
+    for idx, d in enumerate(df.to_dict("records")):
         n += 1
         kwargs = dict(**d)
         kwargs.pop("value", None)
-        print(kwargs.keys())
 
         ABSHeadlineDataRecord.objects.update_or_create(d, **kwargs)
 
@@ -150,8 +152,9 @@ def data(dataflow_id: str, abs_api_key: str = None) -> pd.DataFrame:
                 df[col_name] = df[col_name].apply(perform_subst, kwds=reps_as_dict)
         # finally change the column names to ABS preferred names for the column
         df.columns = cols
-        update_datapoints(df, dataflow_id)
         print(df)
+
+        update_datapoints(df, dataflow_id)
         return df
 
     return fix_dataframe(df, replacements_df, new_cols)
