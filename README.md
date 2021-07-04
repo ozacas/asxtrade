@@ -2,6 +2,8 @@
 
 ![tox workflow](https://github.com/ozacas/asxtrade/actions/workflows/python-package.yml/badge.svg)
 
+![CodeQL](https://github.com/ozacas/asxtrade/workflows/CodeQL/badge.svg)
+
 Python3 based ASX data download and web application with basic features:
 
  * ability to search by sector, keyword, movement, dividend yield or other attributes
@@ -10,7 +12,7 @@ Python3 based ASX data download and web application with basic features:
 
  * historical company metrics (cashflow, earnings, balance sheet) using [YFinance](https://pypi.org/project/yfinance/)
 
- * graphs of datasets over 12 months (or whatever data is available)
+ * bonds/commodities/cryptocurrencies and macro-economic datasets using [investpy](https://investpy.readthedocs.io/_info/introduction.html)
 
  * portfolio optimisation using [PyPortfolioOpt](https://pyportfolioopt.readthedocs.io/en/latest/UserGuide.html)
 
@@ -38,9 +40,9 @@ performance of this software.
 
  ## System Requirements
 
-  * Python 3.8
+  * Python 3.8+
 
-  * Django
+  * Django 3.2+ (recommended with latest Djongo)
 
   * Djongo (python MongoDB for Django apps)
 
