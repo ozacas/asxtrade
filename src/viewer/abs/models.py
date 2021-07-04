@@ -62,7 +62,7 @@ class ABSHeadlineDataRecord(model.Model):
     idx = model.IntegerField(blank=False, null=False)
     time_period = model.TextField(null=False, blank=False)
     variable = model.TextField(null=False, blank=False)
-    value = model.TextField()
+    val = model.TextField()
 
     objects = DjongoManager()
 
@@ -83,15 +83,12 @@ def update_datapoints(df: pd.DataFrame, dataflow: str) -> None:
     ABSHeadlineDataRecord.objects.filter(
         time_period__in=df["time_period"].unique(), dataflow=dataflow
     ).delete()
-    df = df.melt(id_vars=id_cols, value_vars=value_cols)
+    df = df.melt(id_vars=id_cols, value_vars=value_cols, value_name="val")
     # print(df)
     n = 0
     for idx, d in enumerate(df.to_dict("records")):
         n += 1
-        kwargs = dict(**d)
-        kwargs.pop("value", None)
-
-        ABSHeadlineDataRecord.objects.update_or_create(d, **kwargs)
+        ABSHeadlineDataRecord.objects.create(**d)
 
     print(f"Updated {n} ABS data records.")
 
@@ -152,7 +149,7 @@ def data(dataflow_id: str, abs_api_key: str = None) -> pd.DataFrame:
                 df[col_name] = df[col_name].apply(perform_subst, kwds=reps_as_dict)
         # finally change the column names to ABS preferred names for the column
         df.columns = cols
-        print(df)
+        # print(df)
 
         update_datapoints(df, dataflow_id)
         return df

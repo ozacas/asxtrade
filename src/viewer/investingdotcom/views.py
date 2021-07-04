@@ -55,7 +55,7 @@ class CryptoFormView(LoginRequiredMixin, FormView):
         # print(crypto_prices)
         plot_uri = cache_plot(
             f"{crypto_symbol}-{timeframe.description}",
-            lambda: self.make_plot(crypto_prices, timeframe),
+            lambda ld: self.make_plot(crypto_prices, timeframe),
         )
 
         return {
@@ -79,7 +79,7 @@ class CommodityFormView(CryptoFormView):
         df = get_commodity_prices(commodity_str, timeframe)
         plot_uri = cache_plot(
             f"{commodity_str}-{timeframe.description}",
-            lambda: self.make_plot(df, timeframe),
+            lambda ld: self.make_plot(df, timeframe),
         )
         return {
             "title": "Visualize commodity prices over time",
@@ -106,7 +106,7 @@ class BondFormView(CryptoFormView):
         df = get_bond_prices(bond, timeframe)
         plot_uri = cache_plot(
             f"{bond}-{timeframe.description}",
-            lambda: self.make_plot(df, timeframe),
+            lambda ld: self.make_plot(df, timeframe),
         )
         return {
             "title": "Visualise bond yields by country",
