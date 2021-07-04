@@ -339,7 +339,10 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
             )  # not resampling to fill gaps at this time, unless only one country is being plotted: TODO BUG FIXME
             kwargs = {"group": "country", "colour": "country"}
             # print(df)
-            return worldbank_plot(df, indicator.name, True, **kwargs)
+            plot = worldbank_plot(df, indicator.name, True, **kwargs)
+            if len(countries) > 1:
+                plot += p9.theme(legend_position="right")
+            return plot
 
         countries_str = "-".join(countries)
         return cache_plot(
