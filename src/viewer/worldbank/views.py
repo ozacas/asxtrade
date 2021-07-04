@@ -12,6 +12,7 @@ from django.views.generic.edit import FormView
 from django.http import Http404
 from django.urls import reverse
 from django.shortcuts import render
+from lazydict import LazyDictionary
 import plotnine as p9
 from mizani.formatters import date_format
 import pandas as pd
@@ -329,7 +330,7 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
             )  # NB: this is only correct wen len(countries) == 1
             return df
 
-        def make_plot():
+        def make_plot(ld: LazyDictionary):
             resample_lambda = None
             if len(countries) == 1:
                 resample_lambda = fix_gaps
@@ -344,7 +345,6 @@ class WorldBankSCMView(LoginRequiredMixin, FormView):
         return cache_plot(
             f"{indicator.wb_id}-{countries_str}-scm-worldbank-plot",
             make_plot,
-            dont_cache=True,
         )
 
     def form_valid(self, form):
@@ -411,7 +411,7 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
         topic: WorldBankTopic,
         indicators: Iterable[WorldBankIndicators],
     ) -> p9.ggplot:
-        def make_plot():
+        def make_plot(ld: LazyDictionary):
             plot_df = None
             has_yearly = False
             n_datasets = 0
@@ -460,7 +460,6 @@ class WorldBankSCMMView(LoginRequiredMixin, FormView):
         return cache_plot(
             f"{country}-{indicator_id_str}-scmm-worldbank-plot",
             make_plot,
-            dont_cache=True,
         )
 
     def dedupe_indicators(self, selected_indicators) -> list:

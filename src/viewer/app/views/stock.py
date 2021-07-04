@@ -345,7 +345,7 @@ def show_trends(request):
         return cip, trends
 
     trending_companies_plot = cache_plot(
-        f"{user.username}-watchlist-trends", lambda: plot_company_rank(data_factory)
+        f"{user.username}-watchlist-trends", lambda ld: plot_company_rank(data_factory)
     )
     # if trends is None (ie. image cached) then we must compute it for the response
     if trends is None:
@@ -435,7 +435,7 @@ def show_total_earnings(request):
         "timeframe": timeframe,
         "plot_uri": cache_plot(
             f"total-earnings-by-sector:{timeframe.description}",
-            lambda: plot(data_factory(timeframe)),
+            lambda ld: plot(data_factory(timeframe)),
         ),
     }
     return render(request, "total_earnings_by_sector.html", context=context)

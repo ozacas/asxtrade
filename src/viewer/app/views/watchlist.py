@@ -16,6 +16,7 @@ from app.plots import user_theme
 from app.views.core import show_companies
 import pandas as pd
 import matplotlib.pyplot as plt
+from lazydict import LazyDictionary
 import plotnine as p9
 
 
@@ -59,7 +60,7 @@ def cluster_stocks_view(request, stocks: str):
         raise Http404("Unknown stock list {}".format(stocks))
     chosen_k = 7  # often a reasonable tradeoff
 
-    def elbow_curve_plot():
+    def elbow_curve_plot(ld: LazyDictionary):
         distortion, _, _, _, _ = make_kmeans_cluster_dataframe(
             timeframe, chosen_k, asx_codes
         )
@@ -69,7 +70,7 @@ def cluster_stocks_view(request, stocks: str):
         plt.title("Elbow curve")
         return fig
 
-    def cluster_plot():
+    def cluster_plot(ld: LazyDictionary):
         _, _, centroids, idx, data_df = make_kmeans_cluster_dataframe(
             timeframe, chosen_k, asx_codes
         )
