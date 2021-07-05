@@ -389,7 +389,7 @@ def show_total_earnings(request):
     timeframe = Timeframe(past_n_days=180)
 
     def data_factory(timeframe: Timeframe) -> pd.DataFrame:
-        df, n_stocks = pe_trends_df(timeframe)
+        df = pe_trends_df(timeframe)
         # print(df)
         df = df.pivot(
             index=["asx_code", "fetch_date"], columns="field_name", values="field_value"
