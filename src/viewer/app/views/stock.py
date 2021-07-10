@@ -386,17 +386,17 @@ def show_purchase_performance(request):
 @login_required
 def show_total_earnings(request):
     validate_user(request.user)
-    timeframe = Timeframe(past_n_days=180)
 
+    @timing
     def data_factory(timeframe: Timeframe) -> pd.DataFrame:
         df = pe_trends_df(timeframe)
         # print(df)
         df = df.pivot(
             index=["asx_code", "fetch_date"], columns="field_name", values="field_value"
         )
-        df = df[df["number_of_shares"] > 0]  # ignore stocks which have unknown shares
+        required = (df.number_of_shares > 0) & (df.eps > 0.0)
+        df = df[required]  # ignore stocks which have unknowns
         # print(df)
-        df = df[df["eps"] > 0.0]  # ignore stocks burning cash
         df["total_earnings"] = df["eps"] * df["number_of_shares"]
         df = df.dropna(how="any", axis=0)
         df = df.reset_index()
@@ -407,16 +407,20 @@ def show_total_earnings(request):
         df["sector_name"] = df.index
         df = df.melt(id_vars="sector_name", var_name="fetch_date")
         assert set(df.columns) == set(["sector_name", "fetch_date", "value"])
-        df["fetch_date"] = pd.to_datetime(df["fetch_date"])
-        # print(df)
+        df["fetch_date"] = pd.to_datetime(df["fetch_date"], format="%Y-%m-%d")
+
         return df
 
-    def plot(df: pd.DataFrame) -> p9.ggplot:
+    def plot(ld: LazyDictionary) -> p9.ggplot:
+        df = ld["df"]
+        # print(df)
         plot = (
             p9.ggplot(
                 df,
                 p9.aes(
-                    x="fetch_date", y="value", color="sector_name", group="sector_name"
+                    x="fetch_date",
+                    y="value",
+                    color="sector_name",  # group="sector_name"
                 ),
             )
             + p9.geom_line(size=1.2)
@@ -430,12 +434,16 @@ def show_total_earnings(request):
             subplots_adjust={"wspace": 0.25},
         )
 
+    ld = LazyDictionary()
+    timeframe = Timeframe(past_n_days=180)
+    ld["df"] = lambda ld: data_factory(timeframe)
     context = {
         "title": "Earnings per sector over time",
         "timeframe": timeframe,
         "plot_uri": cache_plot(
             f"total-earnings-by-sector:{timeframe.description}",
-            lambda ld: plot(data_factory(timeframe)),
+            lambda ld: plot(ld),
+            datasets=ld,
         ),
     }
     return render(request, "total_earnings_by_sector.html", context=context)

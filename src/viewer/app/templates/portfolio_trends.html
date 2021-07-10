@@ -30,9 +30,12 @@
         <div class="stock-figure">
             {% if stock_performance_uri is None %}
             {% else %}
-            <p>Displays each stock which has been virtually purchased and it's
+            <ul>
+            <li>Displays each stock which has been virtually purchased and it's
                 contribution towards profit/loss of the overall portfolio over time.
-            </p>
+            </li>
+            <li>The plot is smoothed data: the actual profits are approximated with a line to be a less cluttered display</li>
+            </ul>
             <img class="stock-figure" src="/png/{{ stock_performance_uri }}" alt="Stock virtual performance" />
             {% endif %}
         </div>
