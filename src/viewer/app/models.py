@@ -10,11 +10,14 @@ import pandas as pd
 from functools import wraps
 from time import time
 from bson.binary import Binary
+from fastparquet import ParquetFile
+from lazydict import LazyDictionary
 import django.db.models as model
 from django.conf import settings
 from django.forms.models import model_to_dict
 from djongo.models.json import JSONField
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.db.models.signals import post_save
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.dispatch import receiver
@@ -30,7 +33,15 @@ def timing(f):
         result = f(*args, **kw)
         te = time()
         # print('func:%r args:[%r, %r] took: %2.4f sec' %  (f.__name__, args, kw, te-ts))
-        print("func:{} took: {:.3f} sec".format(f.__name__, te - ts))
+        arg_str = ",".join(
+            [
+                str(i)
+                if not isinstance(i, (LazyDictionary, pd.DataFrame))
+                else i.__class__.__name__
+                for i in args
+            ]
+        )
+        print(f"func:{f.__name__}({arg_str}) took: {te-ts:.3f} sec")
         return result
 
     return wrap
@@ -257,6 +268,7 @@ class Quotation(model.Model):
     class Meta:
         db_table = "asx_prices"
         managed = False  # managed by asxtrade.py
+        indexes = [model.Index(fields=["asx_code"]), model.Index(fields=["fetch_date"])]
 
 
 class Security(model.Model):
@@ -527,20 +539,23 @@ def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tupl
         .exclude(asx_code__isnull=True)
         .exclude(error_code="id-or-code-invalid")
         .exclude(last_price__isnull=True)
-        .order_by(
-            "-annual_dividend_yield", "-last_price", "-volume"
-        )  # default order_by, see below
     )
+
     # a date is considered not to have data if <1000 stocks (data currently being downloaded?)
-    if len(results) < 1000 and ensure_date_has_data:
-        # decrease date by 1 and try again... (we cant increment because this might go into the future)
-        dt = datetime.strptime(ymd, "%Y-%m-%d") - timedelta(days=1)
-        return valid_quotes_only(
-            dt.strftime("%Y-%m-%d"), sort_by=sort_by, ensure_date_has_data=True
-        )
+    if ensure_date_has_data:
+        if results.count() < 1000:
+            # decrease date by 1 and try again... (we cant increment because this might go into the future)
+            dt = datetime.strptime(ymd, "%Y-%m-%d") - timedelta(days=1)
+            return valid_quotes_only(
+                dt.strftime("%Y-%m-%d"), sort_by=sort_by, ensure_date_has_data=True
+            )
 
     if sort_by is not None:
         results = results.order_by(sort_by)
+    else:
+        results = results.order_by(
+            "-annual_dividend_yield", "-last_price", "-volume"
+        )  # default order_by, see below
     assert results is not None  # POST-CONDITION: must be valid queryset
     return results, ymd
 
@@ -579,12 +594,13 @@ def desired_dates(
 def all_stocks(strict=True):
     """Return all securities known (even if not stocks) if strict=False, otherwise ordinary fully paid shares and ETFs only"""
     if strict:
-        all_securities = []
-        for security in Security.objects.all():
-            name = security.security_name.lower()
-            if "etf" in name or "ordinary" in name:
-                # print(name)
-                all_securities.append(security.asx_code)
+        all_securities = [
+            security.asx_code
+            for security in Security.objects.filter(
+                Q(security_name__icontains="etf")
+                | Q(security_name__icontains="ordinary")
+            )
+        ]
     else:
         all_securities = Security.objects.values_list("asx_code", flat=True)
 
@@ -727,12 +743,14 @@ def cached_all_stocks_cip(timeframe: Timeframe) -> pd.DataFrame:
 dataframe_in_memory_cache = LFUCache(maxsize=100)
 
 
+@timing
 def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     """
     To save reading parquet files and constructing each pandas dataframe, we cache all that logic
     so that repeated requests for a given tag dont hit the database. Hopefully.
     """
 
+    @timing
     def finalise_dataframe(df):
         """Ensure every dataframe, whether cached or not, is the same"""
         if len(df) == 0:  # dont return empty dataframes
@@ -768,7 +786,8 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
         print(f"Parsing parquet for {tag}")
 
     with io.BytesIO(parquet_blob) as fp:
-        df = pd.read_parquet(fp)
+        pf = ParquetFile(fp)
+        df = pf.to_pandas()
         dataframe_in_memory_cache[tag] = df
         return finalise_dataframe(df)
 
@@ -919,16 +938,17 @@ def company_prices(
     specified dates. By default last_price is provided. Fields may be a list,
     in which case the dataframe has columns for each field and dates are rows (in this case only one stock is permitted)
     """
-    print(
-        "company_prices(len(stocks) == {}, {}, {}, {}, {})".format(
-            len(stock_codes) if stock_codes is not None else stock_codes,
-            timeframe.description,
-            fields,
-            missing_cb,
-            transpose,
-        )
-    )
+    # print(
+    #     "company_prices(len(stocks) == {}, {}, {}, {}, {})".format(
+    #         len(stock_codes) if stock_codes is not None else stock_codes,
+    #         timeframe.description,
+    #         fields,
+    #         missing_cb,
+    #         transpose,
+    #     )
+    # )
 
+    @timing
     def prepare_dataframe(
         df: pd.DataFrame, iterable_of_fields, unpivotable: bool = False
     ) -> pd.DataFrame:
@@ -999,7 +1019,7 @@ class MarketQuoteCache(model.Model):
     # "size_in_bytes" : 2939, "status" : "INCOMPLETE" }
     size_in_bytes = model.IntegerField()
     status = model.TextField()
-    tag = model.TextField()
+    tag = model.TextField(db_index=True)
     dataframe_format = model.TextField()
     field = model.TextField()
     last_updated = model.DateTimeField()
@@ -1077,6 +1097,7 @@ def user_purchases(user):
     return purchases
 
 
+@timing
 @func.ttl_cache(maxsize=100, ttl=8 * 60 * 60)
 def get_parquet(tag: str) -> pd.DataFrame:
     """

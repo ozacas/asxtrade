@@ -48,7 +48,9 @@ def cached_portfolio_performance(user):
     stock_key = f"{username}-stock-performance"
     contributors_key = f"{username}-contributor-performance"
 
-    def data_factory():  # dont create the dataframe unless we have to - avoid exxpensive call!
+    def data_factory(
+        ld: LazyDictionary,
+    ):  # dont create the dataframe unless we have to - avoid exxpensive call!
         purchase_buy_dates = []
         purchases = []
         stocks = []
@@ -67,10 +69,12 @@ def cached_portfolio_performance(user):
 
         return make_portfolio_performance_dataframe(stocks, timeframe, purchases)
 
+    ld = LazyDictionary()
+    ld["df"] = lambda ld: data_factory(ld)
     return (
-        cache_plot(overall_key, lambda: plot_overall_portfolio(data_factory)),
-        cache_plot(stock_key, lambda: plot_portfolio_stock_performance(data_factory)),
-        cache_plot(contributors_key, lambda: plot_portfolio_contributors(data_factory)),
+        cache_plot(overall_key, plot_overall_portfolio, datasets=ld),
+        cache_plot(stock_key, plot_portfolio_stock_performance, datasets=ld),
+        cache_plot(contributors_key, plot_portfolio_contributors, datasets=ld),
     )
 
 
@@ -186,7 +190,7 @@ def plot_fundamentals(
     plot = (
         p9.ggplot(
             plot_df,
-            p9.aes("fetch_date", "value", group="indicator", colour="indicator"),
+            p9.aes("fetch_date", "value", colour="indicator"),
         )
         + p9.geom_path(show_legend=False, size=line_size)
         + p9.facet_wrap("~ indicator", nrow=n, ncol=1, scales="free_y")
@@ -195,7 +199,7 @@ def plot_fundamentals(
 
 
 def plot_overall_portfolio(
-    data_factory: Callable[[], pd.DataFrame],
+    ld: LazyDictionary,
     figure_size=(12, 4),
     line_size=1.5,
     date_text_size=7,
@@ -204,8 +208,7 @@ def plot_overall_portfolio(
     Given a daily snapshot of virtual purchases plot both overall and per-stock
     performance. Return a ggplot instance representing the visualisation
     """
-    portfolio_df = data_factory()
-
+    portfolio_df = ld["df"]
     df = portfolio_df.filter(
         items=["portfolio_cost", "portfolio_worth", "portfolio_profit", "date"]
     )
@@ -222,10 +225,8 @@ def plot_overall_portfolio(
     )
 
 
-def plot_portfolio_contributors(
-    data_factory: Callable[[], pd.DataFrame], figure_size=(11, 5)
-) -> p9.ggplot:
-    df = data_factory()
+def plot_portfolio_contributors(ld: LazyDictionary, figure_size=(11, 5)) -> p9.ggplot:
+    df = ld["df"]
     melted_df = make_portfolio_dataframe(df, melt=True)
 
     all_dates = sorted(melted_df["date"].unique())
@@ -248,10 +249,10 @@ def plot_portfolio_contributors(
 
 
 def plot_portfolio_stock_performance(
-    data_factory: Callable[[], pd.DataFrame], figure_width: int = 12, date_text_size=7
+    ld: LazyDictionary, figure_width: int = 12, date_text_size=7
 ) -> p9.ggplot:
 
-    df = data_factory()
+    df = ld["df"]
     df = df[df["stock_cost"] > 0.0]
 
     # latest_date = df.iloc[-1, 6]
@@ -273,7 +274,7 @@ def plot_portfolio_stock_performance(
 
     plot = (
         p9.ggplot(df, p9.aes("date", "stock_profit", group="stock", colour="stock"))
-        + p9.geom_line(size=1.0)
+        + p9.geom_smooth(size=1.0, span=0.3, se=False)
         + p9.facet_wrap("~bins", ncol=1, nrow=len(bins), scales="free_y")
         + p9.geom_text(
             p9.aes(x="date", y="stock_profit", label="stock"),

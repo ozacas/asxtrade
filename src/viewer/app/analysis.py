@@ -6,6 +6,7 @@ import secrets
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from lazydict import LazyDictionary
 from pyod.models.iforest import IForest
 from pypfopt.expected_returns import mean_historical_return, returns_from_prices
 from pypfopt.discrete_allocation import DiscreteAllocation
@@ -539,58 +540,71 @@ def run_iteration(
     filtered_stocks,
     **kwargs,
 ):
-    weights, performance_dict, _ = strategy(**kwargs)
-    allocator = DiscreteAllocation(
-        weights, first_prices, total_portfolio_value=total_portfolio_value
+    ld = LazyDictionary()
+    ld["weights"] = lambda ld: strategy(
+        **kwargs
+    )  # tuple (weights, performance_dict, _)
+    ld["allocator"] = lambda ld: DiscreteAllocation(
+        ld["weights"][0], first_prices, total_portfolio_value=total_portfolio_value
     )
-    fig, ax = plt.subplots()
-    portfolio, leftover_funds = allocator.greedy_portfolio()
-    # print(portfolio)
-    cleaned_weights = clean_weights(weights, portfolio, first_prices, latest_prices)
+    ld["portfolio"] = lambda ld: ld["allocator"].greedy_portfolio()
+    ld["cleaned_weights"] = lambda ld: clean_weights(
+        ld["weights"][0], ld["portfolio"][0], first_prices, latest_prices
+    )
 
-    # disabled due to TypeError during deepcopy of OSQP results object
-    # if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
-    #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
-    volatility = performance_dict.get("volatility")
-    expected_return = performance_dict.get("expected return")
-    ax.scatter(volatility, expected_return, marker="*", s=100, c="r", label="Portfolio")
-    ax.set_xlabel("Volatility")
-    ax.set_ylabel("Returns (%)")
+    def plot_random_portfolios(ld: LazyDictionary):
+        fig, ax = plt.subplots()
+        # disabled due to TypeError during deepcopy of OSQP results object
+        # if algo.startswith("ef"): # HRP doesnt support frontier plotting atm
+        #    plot_efficient_frontier(ef, ax=ax, show_assets=False)
+        performance_dict = ld["weights"][1]
+        volatility = performance_dict.get("volatility")
+        expected_return = performance_dict.get("expected return")
+        ax.scatter(
+            volatility, expected_return, marker="*", s=100, c="r", label="Portfolio"
+        )
+        ax.set_xlabel("Volatility")
+        ax.set_ylabel("Returns (%)")
 
-    # Generate random portfolios
-    n_samples = 10000
-    w = np.random.dirichlet(np.ones(n_stocks), n_samples)
-    rets = w.dot(mu)
-    stds = np.sqrt(np.diag(w @ s @ w.T))
-    sharpes = rets / stds
-    ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
+        # Generate random portfolios
+        n_samples = 10000
+        w = np.random.dirichlet(np.ones(n_stocks), n_samples)
+        rets = w.dot(mu)
+        stds = np.sqrt(np.diag(w @ s @ w.T))
+        sharpes = rets / stds
+        ax.scatter(stds, rets, marker=".", c=sharpes, cmap="viridis_r")
 
-    # Output
-    ax.set_title(title)
-    ax.legend()
-    plt.tight_layout()
-    fig = plt.gcf()
+        # Output
+        ax.set_title(title)
+        ax.legend()
+        plt.tight_layout()
+        fig = plt.gcf()
+        return fig
 
     # NB: we dont bother caching these plots since we must calculate so many other values but we need to serve them via cache_plot() anyway
-    efficient_frontier_plot = cache_plot(secrets.token_urlsafe(32), lambda: fig)
+    efficient_frontier_plot = cache_plot(
+        secrets.token_urlsafe(32), plot_random_portfolios, datasets=ld
+    )
 
     # only plot covmatrix/corr for significant holdings to ensure readability
-    m = CovarianceShrinkage(
-        filtered_stocks[list(cleaned_weights.keys())[:30]]
+    ld["m"] = lambda ld: CovarianceShrinkage(
+        filtered_stocks[list(ld["cleaned_weights"].keys())[:30]]
     ).ledoit_wolf()
-    # print(m)
-    cor_plot = plot_covariance(m, plot_correlation=True)
 
-    correlation_plot = cache_plot(secrets.token_urlsafe(32), lambda: cor_plot.figure)
-    assert isinstance(cleaned_weights, OrderedDict)
+    correlation_plot = cache_plot(
+        secrets.token_urlsafe(32),
+        lambda ld: plot_covariance(ld["m"], plot_correlation=True).figure,
+        datasets=ld,
+    )
+
     return (
-        cleaned_weights,
-        performance_dict,
+        ld["cleaned_weights"],
+        ld["weights"][1],
         efficient_frontier_plot,
         correlation_plot,
         title,
         total_portfolio_value,
-        leftover_funds,
+        ld["portfolio"][1],
         len(latest_prices),
     )
 
