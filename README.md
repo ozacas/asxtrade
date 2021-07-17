@@ -115,7 +115,7 @@ This new data may not appear in the application until the cache entries expire (
  | Feature             | Thumbnail Picture |
  |:--------------------|------------------:|
  | Portfolio watchlist | ![Pic](https://user-images.githubusercontent.com/11968760/126032074-544bf200-cc39-4837-a9a6-98b8d852c986.png#thumbnail)|
- | Stock view | ![Pic](https://user-images.githubusercontent.com/11968760/91777703-ed7b7600-ec33-11ea-87bf-b647033ed06f.png)|
+ | Stock view | ![Pic](https://user-images.githubusercontent.com/11968760/126032422-84b4f362-e6f9-4cba-81d3-d33a1deaccdc.png#thumbnail)|
  | Market sentiment | ![Pic](https://user-images.githubusercontent.com/11968760/91778464-e48ba400-ec35-11ea-9b47-413601da6fd8.png#thumbnail)|
  | Performance by sector | ![Pic](https://user-images.githubusercontent.com/11968760/110228446-6a760800-7f55-11eb-9041-786e6d145817.png#thumbnail)|
  | Portfolio optimisation | ![Pic](https://user-images.githubusercontent.com/11968760/110228663-e7ee4800-7f56-11eb-8b7d-edd3a09d7b29.png#thumbnail)
