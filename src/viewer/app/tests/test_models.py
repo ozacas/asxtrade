@@ -281,7 +281,7 @@ def quotation_fixture(quotation_factory, company_details_factory):
 
 
 def mock_superdf_all_stocks(*args, **kwargs):
-    assert args[0] == {"uber-01-2021-asx"}
+    assert args[0] == ("uber-01-2021-asx",)
     assert args[1] == ["ABC", "OTHER"]
     assert kwargs == {}
     rows = [
@@ -445,7 +445,7 @@ def test_find_movers(
         return set(["ABC", "OTHER"])
 
     def mock_superdf(*args, **kwargs):  # to correspond to fixture data
-        assert args[0] == {"uber-01-2021-asx"}
+        assert args[0] == ("uber-01-2021-asx",)
         assert args[1] == {"ABC", "OTHER"}
         assert kwargs == {}
         rows = [
