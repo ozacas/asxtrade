@@ -33,12 +33,12 @@ from plotnine.layer import Layers
 
 
 @timing
-def cached_sector_performance(sector: str, sector_companies, **kwargs):
-    def inner(**kwargs):
-        df = make_sector_performance_dataframe(kwargs.get("cip_df"), sector_companies)
+def cached_sector_performance(sector: str, sector_companies, ld: LazyDictionary) -> str:
+    def inner(ld: LazyDictionary):
+        df = make_sector_performance_dataframe(ld.get("cip_df"), sector_companies)
         return plot_sector_performance(df, sector) if df is not None else None
 
-    return cache_plot(f"{sector}-sector-performance", inner, **kwargs)
+    return cache_plot(f"{sector}-sector-performance", inner, datasets=ld)
 
 
 def cached_portfolio_performance(user):
@@ -186,6 +186,7 @@ def plot_fundamentals(
         value_name="value",
     )
     plot_df["value"] = pd.to_numeric(plot_df["value"])
+    plot_df = plot_df.dropna(axis=0, subset=["value"], how="any")
     n = len(columns_to_report)
     plot = (
         p9.ggplot(
@@ -292,13 +293,8 @@ def plot_portfolio_stock_performance(
     )
 
 
-def plot_company_rank(data_factory: Callable[[], tuple]) -> p9.ggplot:
-    (
-        df,
-        _,
-    ) = (
-        data_factory()
-    )  # trends from data_factory is ignored for this call, but the view needs it later...
+def plot_company_rank(ld: LazyDictionary) -> p9.ggplot:
+    df = ld["rank"]
     # assert 'sector' in df.columns
     n_bin = len(df["bin"].unique())
     # print(df)
@@ -315,7 +311,7 @@ def plot_company_rank(data_factory: Callable[[], tuple]) -> p9.ggplot:
     )
     return user_theme(
         plot,
-        figure_size=(8, 20),
+        figure_size=(12, 20),
         subplots_adjust={"right": 0.8},
     )
 
@@ -420,7 +416,7 @@ def plot_series(
         args["color"] = color
     plot = p9.ggplot(df, p9.aes(**args))
     if use_smooth_line:
-        plot += p9.geom_smooth(size=line_size)
+        plot += p9.geom_smooth(size=line_size, span=0.3)
     else:
         plot += p9.geom_line(size=line_size)
     return user_theme(

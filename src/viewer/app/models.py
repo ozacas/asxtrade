@@ -10,7 +10,10 @@ import pandas as pd
 from functools import wraps
 from time import time
 from bson.binary import Binary
+from typing import Iterable, Tuple
 from fastparquet import ParquetFile
+
+# from pyarrow.parquet import read_pandas
 from lazydict import LazyDictionary
 import django.db.models as model
 from django.conf import settings
@@ -462,15 +465,10 @@ def stock_info(stock: str, warning_cb=None) -> dict:
 
 
 @timing
-@func.lru_cache(maxsize=1)
+@func.ttl_cache(maxsize=1)
 def stocks_by_sector() -> pd.DataFrame:
-    rows = [
-        d
-        for d in CompanyDetails.objects.values("asx_code", "sector_name").order_by(
-            "asx_code"
-        )
-    ]
-    df = pd.DataFrame.from_records(rows)
+    rows = [d for d in CompanyDetails.objects.values("asx_code", "sector_name")]
+    df = pd.DataFrame.from_records(rows).sort_values(by="asx_code")
     assert len(df) > 0
     assert set(["asx_code", "sector_name"]) == set(df.columns)
     return df
@@ -788,12 +786,15 @@ def get_dataframe(tag: str, stocks, debug=False) -> pd.DataFrame:
     with io.BytesIO(parquet_blob) as fp:
         pf = ParquetFile(fp)
         df = pf.to_pandas()
+        # df = pd.read_parquet(fp, engine='pyarrow')
+        # df = read_pandas(fp, memory_map=True, buffer_size=128 * 1024).to_pandas()
+        # assert isinstance(df, pd.DataFrame)
         dataframe_in_memory_cache[tag] = df
         return finalise_dataframe(df)
 
 
 @timing
-def make_superdf(required_tags, stock_codes):
+def make_superdf(required_tags: Iterable[str], stock_codes: Iterable[str]):
     assert required_tags is not None and len(required_tags) >= 1
     assert stock_codes is None or len(stock_codes) > 0  # NB: zero stocks considered bad
     dataframes = filter(
@@ -911,14 +912,14 @@ def increasing_only_filter(
     return ret
 
 
-def get_required_tags(all_dates, fields):
+def get_required_tags(all_dates, fields) -> Tuple[str]:
     required_tags = set()
     for d in all_dates:
         validate_date(d)
         yyyy = d[0:4]
         mm = d[5:7]
         required_tags.add("{}-{}-{}-asx".format(fields, mm, yyyy))
-    return required_tags
+    return tuple(required_tags)
 
 
 def first_arg_only(*args):
@@ -953,7 +954,10 @@ def company_prices(
         df: pd.DataFrame, iterable_of_fields, unpivotable: bool = False
     ) -> pd.DataFrame:
         assert isinstance(df, pd.DataFrame)
-        is_ok_field = df["field_name"].isin(iterable_of_fields)
+        if isinstance(iterable_of_fields, str):
+            is_ok_field = df["field_name"] == iterable_of_fields
+        else:
+            is_ok_field = df["field_name"].isin(iterable_of_fields)
         df = df[is_ok_field]
         return (
             df

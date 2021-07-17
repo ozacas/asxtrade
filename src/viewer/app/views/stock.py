@@ -212,7 +212,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
             past_n_days=n_days + 200
         )  # to warmup MA200 function
         df = company_prices(
-            [stock],
+            (stock,),
             momentum_timeframe,
             fields=(
                 "eps",
@@ -333,26 +333,21 @@ def show_trends(request):
     validate_user(user)
     stocks = user_watchlist(user)
     timeframe = Timeframe(past_n_days=300)
-    trends = None  # initialised by data_factory() and returned IFF data_factory is called during cache_plot()
-
-    def data_factory():
-        cip = selected_cached_stocks_cip(stocks, timeframe)
-        trends = calculate_trends(cip)
-        # print(trends)
-        # for now we only plot trending companies... too slow and unreadable to load the page otherwise!
-        cip = rank_cumulative_change(cip.filter(trends.keys(), axis="index"), timeframe)
-        # print(cip)
-        return cip, trends
+    ld = LazyDictionary()
+    ld["cip_df"] = lambda ld: selected_cached_stocks_cip(stocks, timeframe)
+    ld["trends"] = lambda ld: calculate_trends(ld["cip_df"])
+    ld["rank"] = lambda ld: rank_cumulative_change(
+        ld["cip_df"].filter(ld["trends"].keys(), axis="index"), timeframe
+    )
 
     trending_companies_plot = cache_plot(
-        f"{user.username}-watchlist-trends", lambda ld: plot_company_rank(data_factory)
+        f"{user.username}-watchlist-trends",
+        lambda ld: plot_company_rank(ld),
+        datasets=ld,
     )
-    # if trends is None (ie. image cached) then we must compute it for the response
-    if trends is None:
-        _, trends = data_factory()
 
     context = {
-        "watchlist_trends": trends,
+        "watchlist_trends": ld["trends"],
         "timeframe": timeframe,
         "trending_companies_uri": trending_companies_plot,
         "trending_companies_plot_title": "Trending watchlist stocks (ranked): {}".format(

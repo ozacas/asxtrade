@@ -7,6 +7,7 @@ from django.views.generic.list import MultipleObjectTemplateResponseMixin
 from django.views.generic.edit import FormView
 from django.shortcuts import render
 import pandas as pd
+from pandas.core.base import NoNewAttributesMixin
 from app.mixins import SearchMixin
 from app.data import cache_plot
 from app.messages import info
@@ -35,6 +36,7 @@ from app.models import (
 from app.views.core import show_companies
 from app.plots import cached_sector_performance, plot_boxplot_series
 from app.messages import warning
+from lazydict import LazyDictionary
 
 
 class DividendYieldSearch(
@@ -113,6 +115,7 @@ class SectorSearchView(DividendYieldSearch):
     sector = "Communication Services"  # default to Comms. Services if not specified
     template_name = "sector_search_form.html"
     sector_id = None
+    ld = None
 
     def additional_context(self, context):
         return {
@@ -121,7 +124,9 @@ class SectorSearchView(DividendYieldSearch):
             "sector_name": self.sector,
             "sector_id": self.sector_id,
             "sentiment_heatmap_title": "{} sector sentiment".format(self.sector),
-            "sector_performance_plot_uri": self.sector_performance_plot,
+            "sector_performance_plot_uri": self.ld["sector_performance_plot"]
+            if "sector_performance_plot" in self.ld
+            else None,
         }
 
     def get_queryset(self, **kwargs):
@@ -140,12 +145,14 @@ class SectorSearchView(DividendYieldSearch):
         report_top_n = kwargs.get("report_top_n", None)
         report_bottom_n = kwargs.get("report_bottom_n", None)
         timeframe = Timeframe(past_n_days=90)
-        sector_cip = selected_cached_stocks_cip(wanted_stocks, timeframe)
-        self.sector_performance_plot = cached_sector_performance(
-            self.sector, wanted_stocks, sector_cip
+        self.ld = LazyDictionary()
+        self.ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, timeframe)
+        self.ld["sector_performance_plot"] = lambda ld: cached_sector_performance(
+            self.sector, wanted_stocks, ld
         )
+
         if report_top_n is not None or report_bottom_n is not None:
-            cip_sum = sector_cip.transpose().sum().to_frame(name="percent_cip")
+            cip_sum = self.ld["cip_df"].transpose().sum().to_frame(name="percent_cip")
 
             # print(cip_sum)
             top_N = (
