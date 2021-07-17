@@ -140,7 +140,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
         "sector_performance_title": "Cumulative sector avg. performance: {}".format(
             sector_timeframe.description
         ),
-        "title": "Market sentiment: {}".format(timeframe.description),
+        "title": "Market sentiment",
         "market_cap_distribution_uri": market_cap_dist_plot,
     }
     return render(request, "market_sentiment_view.html", context=context)
@@ -265,7 +265,7 @@ def show_pe_trends(request):
     )
 
     context = {
-        "title": "PE Trends: {}".format(timeframe.description),
+        "title": "PE Trends",
         "n_stocks": ld["data_df"]["asx_code"].nunique(),
         "timeframe": timeframe,
         "n_stocks_with_pe": len(ld["positive_pe_tuple"][1]),

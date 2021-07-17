@@ -32,9 +32,7 @@ def show_watched(request):
         timeframe,
         {
             "title": "Stocks you are watching",
-            "sentiment_heatmap_title": "Watchlist stocks sentiment: {}".format(
-                timeframe.description
-            ),
+            "sentiment_heatmap_title": "Watchlist stocks sentiment:",
         },
     )
 

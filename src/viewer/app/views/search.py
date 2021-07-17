@@ -60,11 +60,15 @@ class DividendYieldSearch(
         should override this rather than the template design pattern implementation of render_to_response()
         """
         assert context is not None
+        if self.timeframe is not None:
+            info(
+                self.request,
+                f"Unless stated otherwise, timeframe is {self.timeframe.description}",
+            )
         return {
             "title": "Find by dividend yield or P/E",
-            "sentiment_heatmap_title": "Matching stock heatmap: {}".format(
-                self.timeframe.description
-            ),
+            "timeframe": self.timeframe,
+            "sentiment_heatmap_title": "Matching stock heatmap",
             "n_top_bottom": 20,
         }
 
@@ -118,7 +122,8 @@ class SectorSearchView(DividendYieldSearch):
     ld = None
 
     def additional_context(self, context):
-        return {
+        d = super().additional_context(context)
+        d.update({
             # to highlight top10/bottom10 bookmarks correctly
             "title": "Find by company sector",
             "sector_name": self.sector,
@@ -128,7 +133,8 @@ class SectorSearchView(DividendYieldSearch):
             if "sector_performance_plot" in self.ld
             else None,
             "timeframe_end_performance": timeframe_end_performance(self.ld),
-        }
+        })
+        return d
 
     def get_queryset(self, **kwargs):
         # user never run this view before?
@@ -145,9 +151,9 @@ class SectorSearchView(DividendYieldSearch):
         mrd = latest_quotation_date("ANZ")
         report_top_n = kwargs.get("report_top_n", None)
         report_bottom_n = kwargs.get("report_bottom_n", None)
-        timeframe = Timeframe(past_n_days=90)
+        self.timeframe = Timeframe(past_n_days=90)
         self.ld = LazyDictionary()
-        self.ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, timeframe)
+        self.ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, self.timeframe)
         self.ld["sector_performance_plot"] = lambda ld: cached_sector_performance(
             self.sector, wanted_stocks, ld
         )
@@ -193,10 +199,12 @@ class MoverSearch(DividendYieldSearch):
     action_url = "/search/movers"
 
     def additional_context(self, context):
-        return {
+        d = super().additional_context(context)
+        d.update({
             "title": "Find companies exceeding threshold over timeframe",
             "sentiment_heatmap_title": "Heatmap for moving stocks",
-        }
+        })
+        return d
 
     def get_queryset(self, **kwargs):
         if any(
