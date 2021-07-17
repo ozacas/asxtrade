@@ -46,6 +46,7 @@
               <th>Year high</th>
               <th>Year low</th>
               <th>Sector</th>
+              <th></th>
            </tr>
            {% for stock in page_obj %}
                <tr class="small" style="margin-bottom: 5px">
@@ -59,6 +60,11 @@
                   <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
                   <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
                   <td>{{ stock.asx_code | stock_sector }}</td>
+                  <td>
+                      {% if timeframe_end_performance and stock.asx_code in timeframe_end_performance %}
+                          {% tag_moving_stocks stock.asx_code timeframe_end_performance %}
+                      {% endif %}
+                  </td>
                 </tr>
                {% if stock.asx_code in virtual_purchases %}
                    {% for purchase in virtual_purchases|get_item:stock.asx_code %}

@@ -21,6 +21,17 @@ def get_item(d, key):
     return d.get(key)
 
 
+@register.simple_tag
+def tag_moving_stocks(asx_code: str, timeframe_end_performance: dict) -> str:
+    percent_moved = timeframe_end_performance.get(asx_code)
+    if percent_moved > 5.0:
+        return mark_safe(f'<span class="badge badge-success">up &gt;5%</span>')
+    elif percent_moved < -5.0:
+        return mark_safe(f'<span class="badge badge-danger">down &gt;5%</span>')
+    else:
+        return ""
+
+
 @register.filter
 def has_item(d, key):
     try:
