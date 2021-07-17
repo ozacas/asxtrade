@@ -9,7 +9,7 @@ from django.shortcuts import render
 import pandas as pd
 from pandas.core.base import NoNewAttributesMixin
 from app.mixins import SearchMixin
-from app.data import cache_plot
+from app.data import cache_plot, timeframe_end_performance
 from app.messages import info
 from app.forms import (
     DividendSearchForm,
@@ -118,14 +118,6 @@ class SectorSearchView(DividendYieldSearch):
     ld = None
 
     def additional_context(self, context):
-        timeframe_end_perf = (
-            self.ld["cip_df"][self.ld["cip_df"].columns[-1]]
-            if self.ld and "cip_df" in self.ld
-            else None
-        )
-        if timeframe_end_perf is not None:
-            timeframe_end_perf = timeframe_end_perf.to_dict()
-        print(timeframe_end_perf)
         return {
             # to highlight top10/bottom10 bookmarks correctly
             "title": "Find by company sector",
@@ -135,7 +127,7 @@ class SectorSearchView(DividendYieldSearch):
             "sector_performance_plot_uri": self.ld["sector_performance_plot"]
             if "sector_performance_plot" in self.ld
             else None,
-            "timeframe_end_performance": timeframe_end_perf,
+            "timeframe_end_performance": timeframe_end_performance(self.ld),
         }
 
     def get_queryset(self, **kwargs):

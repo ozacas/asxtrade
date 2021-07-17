@@ -31,7 +31,7 @@ from app.models import (
 )
 from app.messages import info, warning, add_messages
 from app.plots import plot_heatmap, plot_breakdown, user_theme
-from app.data import cache_plot
+from app.data import cache_plot, timeframe_end_performance
 from plotnine.layer import Layers
 
 
@@ -131,13 +131,11 @@ def show_companies(
     context["object_list"] = paginator
 
     # compute totals across all dates for the specified companies to look at top10/bottom10 in the timeframe
-    cip = selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
-    sum_by_company = cip.sum(axis=1)
-    top10 = sum_by_company.nlargest(n_top_bottom)
-    bottom10 = sum_by_company.nsmallest(n_top_bottom)
-
     ld = LazyDictionary()
-    ld["cip_df"] = cip
+    ld["cip_df"] = lambda ld: selected_cached_stocks_cip(asx_codes, sentiment_timeframe)
+    ld["sum_by_company"] = lambda ld: ld["cip_df"].sum(axis=1)
+    ld["top10"] = lambda ld: ld["sum_by_company"].nlargest(n_top_bottom)
+    ld["bottom10"] = lambda ld: ld["sum_by_company"].nsmallest(n_top_bottom)
 
     if len(asx_codes) <= 0:
         warning(request, "No matching companies found.")
@@ -194,20 +192,20 @@ def show_companies(
             return user_theme(plot, y_axis_label="Cumulative Return (%)")
 
         top10_plot_uri = cache_plot(
-            f"top10-plot-{'-'.join(top10.index)}",
-            lambda ld: plot_cumulative_returns(top10.index, ld),
+            f"top10-plot-{'-'.join(ld['top10'].index)}",
+            lambda ld: plot_cumulative_returns(ld["top10"].index, ld),
             datasets=ld,
         )
         bottom10_plot_uri = cache_plot(
-            f"bottom10-plot-{'-'.join(bottom10.index)}",
-            lambda ld: plot_cumulative_returns(bottom10.index, ld),
+            f"bottom10-plot-{'-'.join(ld['bottom10'].index)}",
+            lambda ld: plot_cumulative_returns(ld["bottom10"].index, ld),
             datasets=ld,
         )
 
         context.update(
             {
-                "best_ten": top10,
-                "worst_ten": bottom10,
+                "best_ten": ld["top10"],
+                "worst_ten": ld["bottom10"],
                 "sentiment_heatmap_uri": sentiment_heatmap_uri,
                 "sentiment_heatmap_title": "{}: {}".format(
                     context["title"], sentiment_timeframe.description
@@ -215,6 +213,7 @@ def show_companies(
                 "sector_breakdown_uri": sector_breakdown_uri,
                 "top10_plot_uri": top10_plot_uri,
                 "bottom10_plot_uri": bottom10_plot_uri,
+                "timeframe_end_performance": timeframe_end_performance(ld),
             }
         )
 

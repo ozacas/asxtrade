@@ -7,6 +7,7 @@ from datetime import datetime
 import io
 import re
 import hashlib
+from time import time
 from typing import Any, Iterable, Callable
 import math
 import numpy as np
@@ -462,3 +463,12 @@ def make_pe_trends_positive_pe_df(
     pe_pos_df = pe_pos_df.set_index("asx_code", drop=True)
 
     return pe_pos_df, positive_pe_stocks
+
+
+def timeframe_end_performance(ld: LazyDictionary) -> pd.Series:
+    if ld is None or "cip_df" not in ld:
+        return None
+
+    timeframe_end_perf = ld["cip_df"].sum(axis=1)
+    # print(timeframe_end_perf)
+    return timeframe_end_perf.to_dict()
