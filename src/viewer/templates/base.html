@@ -89,6 +89,8 @@
                     {% block searchform %}
                     {% endblock %}
 
+                    {%if timeframe %}<div class="alert alert-secondary info">Unless stated otherwise, timeframe is: {{ timeframe.description }}</div>{% endif %}
+
                     {% block content %}
                     {% endblock %}
                 </div>
