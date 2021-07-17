@@ -6,6 +6,8 @@ from datetime import datetime, date
 import calendar
 import hashlib
 import pymongo
+#from pyarrow import Table
+#import pyarrow.parquet as pq
 from bson.binary import Binary
 import pandas as pd
 
@@ -61,14 +63,24 @@ def load_prices(db, field_name, month, year) -> pd.DataFrame:
     #print(df)
     return df, rows
 
-def save_dataframe(db, df, tag, field_name, status, market, scope, compression='snappy', n_days=None, n_stocks=None):
+def save_dataframe(db, df, tag, field_name, n_days=None, n_stocks=None, **kwargs):
     assert isinstance(df, pd.DataFrame) and len(df) > 0
     assert db is not None
-    #print(df.dtypes)
+    #print(df.dtypes)   
+    for colname in ['asx_code', 'fetch_date', 'field_name']:
+        if colname in df.columns:
+           print(f"Making {colname} a categorical column")
+           df[colname] = pd.Categorical(df[colname], categories=df[colname].unique())
+    scope = kwargs.get('scope', 'all-downloaded')
+    market = kwargs.get('market', 'asx')
+    compression = kwargs.get('compression', 'snappy') 
+    status = kwargs.get('status', 'FINAL')
     with io.BytesIO() as fp:
         # NB: if this fails it may be because you are using fastparquet 
         # which doesnt (yet) support BytesIO. Use eg. pyarrow
-        df.to_parquet(fp, compression='gzip', index=True)
+        df.to_parquet(fp, compression=compression, index=True)
+        #table = Table.from_pandas(df, nthreads=1)
+        #pq.write_table(table, fp, use_dictionary=True, compression=compression)
         fp.seek(0)
         byte_content = fp.read()
         size = len(byte_content)
@@ -89,10 +101,11 @@ def save_dataframe(db, df, tag, field_name, status, market, scope, compression='
         }}, upsert=True)
         print(f"{tag} == {size} bytes (sha256 hexdigest {sha256_hash})")
 
-def load_all_prices(db, month: int, year: int, required_fields, status='FINAL', market='asx', scope='all-downloaded'):
+def load_all_prices(db, month: int, year: int, required_fields, **kwargs):
     assert len(required_fields) > 0
     db.market_quote_cache.create_index([('tag', pymongo.ASCENDING)], unique=True)
     uber_df = None
+    market = kwargs.get('market', 'asx')
     for field_name in required_fields:
         print("Constructing matrix: {} {}-{}".format(field_name, month, year))
         df, rows = load_prices(db, field_name, month, year)
@@ -122,7 +135,8 @@ def load_all_prices(db, month: int, year: int, required_fields, status='FINAL', 
     print("% missing values: ", ((uber_df.isnull() | uber_df.isna()).sum() * 100 / uber_df.index.size).round(2))
     n_stocks = uber_df['asx_code'].nunique()
     n_days = uber_df['fetch_date'].nunique()
-    save_dataframe(db, uber_df, uber_tag, 'uber', status, market, scope, compression='gzip', n_days=n_days, n_stocks=n_stocks)
+    #print(uber_df)
+    save_dataframe(db, uber_df, uber_tag, 'uber', n_days=n_days, n_stocks=n_stocks, **kwargs)
 
 if __name__ == "__main__":
     a = argparse.ArgumentParser(description="Construct and ingest db.asx_prices into parquet format month-by-month and persist to mongo")
@@ -153,6 +167,9 @@ if __name__ == "__main__":
     a.add_argument("--month", help="Month of year 1..12", required=True, type=int)
     a.add_argument("--year", help="Year to load [2021]", default=2021, type=int)
     a.add_argument("--status", help="Status of matrix eg. INCOMPLETE or FINAL", required=True, type=str)
+    a.add_argument("--past365", help="Make past 365 days dataframe for speedier asxtrade.py [False]", action="store_true")
+    a.add_argument('--compression', help="Compression to use [snappy]", choices=('gzip', 'lz4', 'snappy'), default='snappy')
+    a.add_argument('--market', help="Market [asx]", type=str, default='asx')
     args = a.parse_args()
 
     pwd = str(args.dbpassword)
@@ -164,6 +181,6 @@ if __name__ == "__main__":
     required_fields = ['change_in_percent', 'last_price', 'change_price', \
                        'day_low_price', 'day_high_price', 'volume', 'eps', \
                        'pe', 'annual_dividend_yield', 'market_cap', 'number_of_shares']
-    load_all_prices(db, args.month, args.year, required_fields, args.status)
+    load_all_prices(db, args.month, args.year, required_fields, market=args.market, status=args.status, compression=args.compression)
     print("Run completed successfully.")
     exit(0)
