@@ -1,6 +1,6 @@
 # asxtrade
 
-![tox workflow](https://github.com/ozacas/asxtrade/actions/workflows/python-package.yml/badge.svg)
+![tox workflow](https://github.com/ozacas/asxtrade/actions/workflows/build.yml/badge.svg)
 
 ![CodeQL](https://github.com/ozacas/asxtrade/workflows/CodeQL/badge.svg)
 
