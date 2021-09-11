@@ -81,4 +81,14 @@
 </div>
 {% endif %}
 
+{% if monthly_sector_mean_returns is None %}
+{% else %}
+<div class="row">
+    <h3 class="mt-4">Month-by-month returns (%) </h3>
+    {% for k, plot_uri in monthly_sector_mean_returns.items %}
+        <img src="/png/{{ plot_uri }}" alt="{{k}} month-by-month percentage returns" />
+    {% endfor %}
+</div>
+{% endif %}
+
 {% endblock %}

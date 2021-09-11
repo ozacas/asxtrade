@@ -603,13 +603,9 @@ def desired_dates(
 def all_stocks(strict=True):
     """Return all securities known (even if not stocks) if strict=False, otherwise ordinary fully paid shares and ETFs only"""
     if strict:
-        all_securities = [
-            security.asx_code
-            for security in Security.objects.filter(
-                Q(security_name__icontains="etf")
-                | Q(security_name__icontains="ordinary")
-            )
-        ]
+        all_securities = Security.objects.filter(
+            Q(security_name__icontains="etf") | Q(security_name__icontains="ordinary")
+        ).values_list("asx_code", flat=True)
     else:
         all_securities = Security.objects.values_list("asx_code", flat=True)
 

@@ -35,6 +35,7 @@ from app.plots import (
     plot_market_cap_distribution,
     plot_sector_field,
     plot_sector_top_eps_contributors,
+    plot_sector_monthly_mean_returns,
 )
 from lazydict import LazyDictionary
 
@@ -71,7 +72,7 @@ def make_quote_df(quotes, asx_codes: Iterable[str], prefix: str):
 
 
 @login_required
-def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
+def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=365):
     validate_user(request.user)
     assert n_days > 0
     assert n_top_bottom > 0
@@ -120,13 +121,25 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
         f"sector-performance-{sector_descr}",
         lambda ld: plot_market_wide_sector_performance(ld),
         datasets=ld,
-        dont_cache=True,
     )
     market_cap_dist_plot = cache_plot(
         f"market-cap-dist-{sector_descr}",
         lambda ld: plot_market_cap_distribution(ld),
         datasets=ld,
     )
+
+    df = ld["sector_cumsum_df"].transpose()
+    df.index = pd.to_datetime(df.index, format="%Y-%m-%d")
+    df = (
+        df.resample(
+            "BM",
+        )
+        .asfreq()
+        .diff(periods=1)
+    )
+    ld["monthly_returns_by_stock"] = df
+    # print(df)
+
     context = {
         "sentiment_uri": sentiment_plot,
         "n_days": ld["timeframe"].n_days,
@@ -140,6 +153,7 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=180):
         ),
         "title": "Market sentiment",
         "market_cap_distribution_uri": market_cap_dist_plot,
+        "monthly_sector_mean_returns": plot_sector_monthly_mean_returns(ld),
     }
     return render(request, "market_sentiment_view.html", context=context)
 

@@ -344,9 +344,9 @@ def plot_market_wide_sector_performance(ld: LazyDictionary) -> p9.ggplot:
             n_stocks, len(code_and_sector), len(df)
         )
     )
-    print(df)
+    # print(df)
     grouped_df = df.groupby("sector_name").mean()
-    print(grouped_df)
+    # print(grouped_df)
 
     # ready the dataframe for plotting
     grouped_df = pd.melt(
@@ -912,3 +912,37 @@ def plot_monthly_returns(
     return user_theme(
         plot, asxtrade_want_cmap_d=False, asxtrade_want_fill_continuous=True
     )
+
+
+def plot_sector_monthly_mean_returns(ld: LazyDictionary) -> dict:
+    all_stocks = ld["monthly_returns_by_stock"]
+    ret = {}
+    plots = []
+    plots.append(
+        ("All stock average", all_stocks.mean(axis=1).to_frame(name="average"))
+    )
+    ss = ld["stocks_by_sector"]
+    # print(ss)
+    for current_sector in ss["sector_name"].unique():
+        # print(current_sector)
+        wanted_stocks = set(ss[ss["sector_name"] == current_sector]["asx_code"])
+        # print(wanted_stocks)
+        df = all_stocks.filter(items=wanted_stocks, axis="columns")
+        # print(df)
+        plots.append(
+            (f"Sector: {current_sector}", df.mean(axis=1).to_frame(name="average"))
+        )
+
+    for title, df in plots:
+        # print(title)
+        # print(df)
+        plot = p9.ggplot(df, p9.aes(x="df.index", y="average")) + p9.geom_bar(
+            stat="identity"
+        )
+        ret[title] = cache_plot(
+            f"{title}-monthly-mean-returns",
+            lambda ld: user_theme(
+                plot, y_axis_label="Average percent return per month", title=title
+            ),
+        )
+    return ret
