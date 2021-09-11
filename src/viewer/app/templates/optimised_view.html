@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% load crispy_forms_tags %}
+
+{% block searchform %}
+
+<div class="row mt-2">
+    <h2>Portfolio optimisation: {{ stock_selector }}</h2>
+</div>
+
+
+<div class="row mt-4">
+    <form action="{{ action_url }}" method="POST">
+        <table>
+           {% csrf_token %}
+           {{ form | crispy }}
+           <tr><td></td><td><input class="btn btn-success" type="submit" value="Submit"></td></tr>
+        </table>
+    </form>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if efficient_frontier_plot_uri is not None %}
+<div class="row mt-4">
+    <h2>Results</h2>
+</div>
+
+<div class="row mt-2">
+
+    <p>
+        Not all stocks are shown:
+    </p>
+    <ol>
+        <li>Stocks with little change in prices are excluded</li>
+        <li>Stocks with no current price data are also excluded (unable to price share allocation)</li>
+        <li>A total of {{ n_stocks_considered }} stocks were considered during portfolio optimisation</li>
+        <li>A total of {{ n_stocks_in_portfolio }} stocks are reported in the weights/share allocation below</li>
+        <li>The correlation plot is limited to 30 stocks (most weighted) as more than this becomes unreadable</li>
+        <li>The most weighted stocks reported must explain at least 80% of the portfolio: small weighted stocks may not be reported</li>
+        <li>Large pools of stocks are impractical to compute: by default 80 stocks (at most) are chosen at random. You may increase this at own risk.</li>
+        <li>Only stock prices are considered: dividends, stock splits, capital raisings and many other events are ignored</li>
+        <li>Timeframe: {{ timeframe.date_range }}</li>
+    </ol>
+
+</div>
+    
+<div class="row mt-2">
+    <h4>{{ algo |title }} cleaned weights and share allocation</h4>
+</div>
+
+<div class="row mt-4">
+    <table style="width: 80%">
+        <tr><th>Stock</th>
+            <th>Weight (%)</th>
+            <th>Number of shares in ${{ portfolio_cost }} portfolio</th>
+            <th>Cost per share today ($AUD)</th>
+            <th>Cost per share at start ($AUD)</th>
+            <th>Total profit ($AUD)</th>
+            <th>Sector</th>
+        </tr>
+        {% for stock, tuple in cleaned_weights.items %}
+            <tr>
+                <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
+                <td>{{ tuple.1|percentage|floatformat }}</td>
+                <td>{{ tuple.2 }}</td>
+                <td>{{ tuple.3 |floatformat:3 }}</td>
+                <td>{{ tuple.4 |floatformat:3 }}</td>
+                <td>{{ tuple.5 |floatformat }}</td>
+                <td>{{ stock |stock_sector }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="row mt-4">
+    <ul>
+        {% if total_cleaned_weight_pct < 99.5 %}
+        <li>{{ total_cleaned_weight_pct | floatformat }}% of the total allocation is shown above (small allocations not shown)</li>
+        {% endif %}
+        {% if leftover_funds > 0.0 %}
+        <li>Due to whole share purchases, some funds could not be allocated: ${{ leftover_funds|floatformat:2 }}</li>
+        {% endif %}
+        <li>Total profit ($AUD) over timeframe: {{ total_profit_aud |floatformat }}</li>
+    </ul>
+</div>
+
+<div class="row mt-2">
+    <h4>Portfolio performance</h4>
+</div>
+
+<div class="row mt-2">
+    <table style="width: 60%" class="mt-4">
+        {% for key, val in portfolio_performance_dict.items %}
+            <tr><td>{{ key |title }}</td><td>{{ val |floatformat }}</td></tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="row mt-2">
+    <h4>Risk/reward portfolio plot</h4>
+</div>
+
+<div class="mt-2 row">
+    <img src="/png/{{ efficient_frontier_plot_uri }}" alt="Plot of portfolio risk/performance" />
+</div>
+
+<div class="row mt-2">
+    <h4>Correlation plot</h4>
+</div>
+
+<div class="mt-2 row">
+    <img src="/png/{{ correlation_plot_uri }}" alt="Plot of stock correlation of optimal portfolio">
+</div>
+
+{% endif %}
+{% endblock %}

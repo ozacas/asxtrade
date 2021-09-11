@@ -1,0 +1,5 @@
+{% for h in hits %}
+   <option 
+       {% if h.id == current_id %}selected="selected"{% endif %}
+       value="{{ h.indicator_id }}">{{ h.indicator_name }}</option>
+{% endfor %}

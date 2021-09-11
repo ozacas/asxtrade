@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block header %}
+<div class="row">
+    <h3 class="mt-4">Trends for watched stocks over past 300 days</h3>
+</div>
+{% endblock %}
+
+{% block content %}
+{% if watchlist_trends %}
+<div class="row">
+    <table style="width: 60%" class="mt-4">
+        <tr>
+            <th>Stock</th>
+            <th>R^2 (300 days)</th>
+            <th>NRMSE (300 days)</th>
+            <th>R^2 (30 days)</th>
+            <th>NRMSE (30 days)</th>
+        </tr>
+        {% for stock, tuple in watchlist_trends.items %}
+        <tr class="{{ tuple.4 }}">
+            <td>{% clickable_stock stock user=request.user.username next=request.path %}</td>
+            <td>{{ tuple.0 |floatformat }}</td>
+            <td>{{ tuple.1 |floatformat }}</td>
+            <td>{{ tuple.2 |floatformat }}</td>
+            <td>{{ tuple.3 |floatformat }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<div class="row mt-4">
+    <h3>{{ trending_companies_plot_title }}</h3>
+
+    <img src="/png/{{ trending_companies_uri }}" />
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block header %}
+    <div class="row">
+        {% include 'stock_information.html' with data=information %}
+        <div class="mt-4">
+            <table>
+                <tr>
+                    <td class="padded"><a href="/data/financial-metrics-{{ asx_code }}/excel"
+                            class="btn btn-primary">Download balance
+                            sheet</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="padded"><a href="/show/metrics/{{ asx_code}}" class="btn btn-primary">Show financial
+                            performance</a>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        {% include 'stock_momentum.html' with data=momentum %}
+    </div>
+    <div class="row">
+        {% include 'stock_fundamentals.html' with data=fundamentals %}
+    </div>
+
+    {% if month_by_month_return_uri is not None %}
+    <div class="row">
+        <div class="mt-4">
+            <h3>Month-by-month percentage returns (%)</h3>
+
+            <img src="/png/{{ month_by_month_return_uri }}" alt="Month-by-month percentage returns" />
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        {% include 'stock_sector.html' %}
+    </div>
+
+{% endblock %}

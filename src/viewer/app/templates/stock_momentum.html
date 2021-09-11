@@ -1,0 +1,18 @@
+
+<div class="mt-4">
+        <h3>Momentum</h3>
+        <img class="stock"
+                src="/png/{{ data.rsi_plot }}"
+                alt="RSI data plot for ASX.{{ asx_code }}" />
+
+        {% if data.monthly_highest_price is None %}
+        {% else %}
+        <h3>{{ data.monthly_highest_price.title }}</h3>
+
+        <img class="month_best_price_plot"
+                src="/png/{{ data.monthly_highest_price.plot_uri }}"
+                alt="{{ data.monthly_highest_price.title }}" />
+
+        <p>Plot the maximum of last trade price encountered each day of the month over the timeframe: {{ timeframe.description }}</p>
+        {% endif %}
+</div>

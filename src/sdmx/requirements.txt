@@ -1,0 +1,4 @@
+pandasdmx
+requests_cache
+pytest
+pandas

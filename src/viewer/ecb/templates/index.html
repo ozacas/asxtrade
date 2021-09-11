@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+    <h3 class="mt-4">European Central Bank datasets</h3>
+
+    <table>
+    {% for item in dataflows %}
+            <tr><td class="padded"><a href="/ecb/dataflow/{{ item.name }}">{{ item.description }}</a></td></tr>
+    {% endfor %}
+    </table>
+    
+{% endblock %}

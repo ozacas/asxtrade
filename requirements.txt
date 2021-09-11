@@ -1,0 +1,27 @@
+cachetools
+diskcache
+Django >=3.1.9
+django-menu
+django-autocomplete-light
+django-debug-toolbar
+djongo >= 1.3.6
+fastparquet >= 0.6.3
+investpy
+lazydict
+matplotlib
+numpy
+pandas >= 1.1.0
+wbdata
+plotnine >= 0.8.0
+pytest-django
+pytest-mock
+pytest-factoryboy
+pytest-cov
+pyod
+pyportfolioopt
+shapely >= 1.7.0
+sqlparse==0.2.4
+tox
+xlsxwriter
+yfinance
+django-crispy-forms

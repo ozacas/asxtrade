@@ -1,0 +1,14 @@
+
+{% extends "search_form.html" %}
+
+{% block content %}
+     {% include "stock_list.html" %}
+
+     {% if sector_performance_plot_uri %}
+     <div class="row">
+         <h3>Total stocks moving more than 5% in {{ sector_name }}</h3>
+         
+         <img class="mt-4" src="/png/{{ sector_performance_plot_uri }}" alt="{{ sector_name }} performance" />
+     </div>
+     {% endif %}
+{% endblock %}

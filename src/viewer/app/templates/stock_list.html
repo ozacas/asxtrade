@@ -1,0 +1,215 @@
+{% load static %}
+{% load myfilters %}
+{% block stock_list %}
+
+{% if page_obj is None %}
+    <div class="row mt-2"><p>No stocks to display.</p></div>
+{% else %}
+    <div class="row mt-2">
+        <form action="{{ request.path }}" method="GET">
+            Sort by <select name="sort_by" id="sort_by" class="selectpicker" data-style="btn-info" onchange="this.form.submit()">
+                <option value="asx_code">ASX code</option>
+                <option value="change_in_percent">Daily change (%)</option>
+                <option value="change_price">Daily change ($AUD)</option>
+                <option value="-annual_dividend_yield">Dividend yield</option>
+                <option value="-eps">Earnings per share</option>
+                <option value="pe">P/E</option>
+                <option value="last_price">Price ($AUD)</option>
+                <option value="sector">Sector</option>
+                <option value="sector,-eps">Sector then EPS (desc.)</option>
+            </select>
+        </form>
+    </div>
+
+    <script type="text/javascript">
+        function set_selected(default_to_set) {
+            $('#sort_by').val(default_to_set)
+        }
+        var urlParams = new URLSearchParams(window.location.search);
+        var sort_value = urlParams.get('sort_by')
+        if (sort_value == null) { 
+            sort_value = "asx_code"
+        }
+        set_selected(sort_value)
+    </script>
+    
+    <div class="row mt-2">
+        <table style="width: 100%">
+           <tr>
+              <th class="top">ASX Code</th>
+              <th class="top"></th>
+              <th class="top">Price<br/>($AUD)</th>
+              <th class="top">Sector</th>
+              <th class="top">Day change</th>
+              <th class="top">Volume<br/>($AUD Mil.)</th>
+              <th class="top">EPS</th>
+              <th class="top">PE</th>
+              <th class="top">Annual<br/>yield</th>
+              <th class="top">Year high</th>
+              <th class="top">Year low</th>
+             
+           </tr>
+           {% for stock in page_obj %}
+               <tr class="small" style="margin-bottom: 5px">
+                  <td>{% clickable_stock stock.asx_code user=request.user.username next=request.path %}</td>
+                  <td>
+                      {% if timeframe_end_performance and stock.asx_code in timeframe_end_performance %}
+                          {% tag_moving_stocks stock.asx_code timeframe_end_performance %}
+                      {% endif %}
+                  </td>
+                  <td>{{ stock.last_price |floatformat:2 }}</td>
+                  <td>{{ stock.asx_code | stock_sector }}</td>
+                  {% if stock.change_price != None %}
+                  <td>{{ stock.change_price|floatformat:2 }} <span class="unimportant">({{ stock.change_in_percent |floatformat:1 }}%)</span></td>
+                  {% else %}
+                  <td></td>
+                  {% endif %}
+                  <td align="center">{{ stock.volume_as_millions }}</td>
+                  <td align="right">{{ stock.eps_as_cents|floatformat }}</td>
+                  <td align="center">{{ stock.pe|floatformat }}</td>
+                  <td>{{ stock.annual_dividend_yield |floatformat }}</td>
+                  {% if stock.year_high_price != None %}
+                  <td>{{ stock.year_high_price }} <span class="unimportant">(on {{ stock.year_high_date }})</span></td>
+                  {% else %}
+                  <td></td>
+                  {% endif %}
+                  {% if stock.year_low_price != None %}
+                  <td>{{ stock.year_low_price }} <span class="unimportant">(on {{ stock.year_low_date }})</span></td>
+                  {% else %}
+                  <td></td>
+                  {% endif %}
+                </tr>
+               {% if stock.asx_code in virtual_purchases %}
+                   {% for purchase in virtual_purchases|get_item:stock.asx_code %}
+                   <tr>
+                      <td></td>
+                      <td colspan="6" class="small">{{ purchase }}</td>
+                      <td><a href="/delete/purchase/{{ purchase.id }}"><img src="{% static "trashcan.png" %}" width="12" />
+                          </a>&nbsp;<a href="/update/purchase/{{ purchase.id }}"><img src="{% static "edit.jpg" %}" width="12" /></a>
+                      </td>
+                   </tr>
+                   {% endfor %}
+               {% endif %}
+           {% endfor %}
+        </table>
+    </div>
+
+    <div class="row pagination mt-4">
+        <table style="width: 80%" align="center">
+            <tr><td style="padding: 10px 10px" align="center">
+                <span class="step-links">
+                    {% if page_obj.number > 1 %}
+                        <a href="?page=1" class="btn btn-primary" rel="keep-params">&laquo; first</a>
+                        <a href="?page={{ page_obj.previous_page_number }}" rel="keep-params" class="btn btn-primary">previous</a>
+                    {% endif %}
+
+                    {% if page_obj.paginator.num_pages > 1 %}
+                        <span class="current">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+                        </span>
+                    {% endif %}
+
+                    {% if page_obj.number < page_obj.paginator.num_pages %}
+                        <a href="?page={{ page_obj.next_page_number }}" rel="keep-params" class="btn btn-primary">next</a>
+                        <a href="?page={{ page_obj.paginator.num_pages }}" rel="keep-params" class="btn btn-primary">last &raquo;</a>
+                    {% endif %}
+                </span>
+            </td></tr>
+            <tr><td align="center">
+                {% if '/show/outliers' not in request.path %}
+                <span>
+                    {% if '/show/watched' in request.path %}
+                    &nbsp;<a href="/show/outliers/watchlist/30" class="btn btn-primary">Outliers (past 30 days)</a>
+                    &nbsp;<a href="/show/outliers/watchlist/180" class="btn btn-primary">Outliers (180 days, SLOW)</a>
+                    &nbsp;<a href="/show/optimized/watchlist" class="btn btn-primary">Optimise portfolio</a>
+                    {% elif '/search/by-sector' in request.path %}
+                    &nbsp;<a href="/show/outliers/sector/{{ sector_id }}/30" class="btn btn-primary">Outliers (past 30 days)</a>
+                    &nbsp;<a href="/show/outliers/sector/{{ sector_id }}/30" class="btn btn-primary">Outliers (180 days, SLOW)</a>
+                    &nbsp;<a href="/show/optimized/sector/" class="btn btn-primary">Sector optimisation</a>
+                    {% elif '/show/etfs' in request.path %}
+                    &nbsp;<a href="/show/optimized/etfs" class="btn btn-primary">ETF optimisation</a>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </td></tr>
+            <tr>
+                <td align="center"><span>
+                {% if '/show/outliers' not in request.path %}
+                    {% if virtual_purchases %}
+                    &nbsp;<a href="/show/trends" class="btn btn-primary">Trends</a>
+                    &nbsp;<a href="/show/purchase-performance" class="btn btn-primary">Purchase performance</a>
+                    {% endif %}
+                    {% if '/show/watched' in request.path %}
+                    &nbsp;<a href="/cluster/kmeans/watchlist" class="btn btn-primary">Cluster stocks</a>
+                    {% endif %}
+                    {% if '/show/etfs' in request.path %}
+                    &nbsp;<a href="/cluster/kmeans/etfs" class="btn btn-primary">Cluster ETFs</a>
+                    {% endif %}
+                    {%if '/search/by-sector' in request.path %}
+                    &nbsp;<a href="/cluster/kmeans/sector-{{ sector_id }}" class="btn btn-primary">Cluster sector stocks</a>
+                    {% endif %}
+                {% endif %}
+                </span>
+            </td></tr>
+        </table>
+    </div>
+
+    <script type="text/javascript">
+        // all <a> tags containing a certain rel=""
+        $("a[rel~='keep-params']").click(function(e) {
+            e.preventDefault();
+
+            var params = new URLSearchParams(window.location.search.substr(1));
+            params.delete("page");  // remove existing page query param (if any)
+            var dest = $(this).attr('href') + '&' + params.toString();
+            console.log(dest)
+
+            // in my experience, a short timeout has helped overcome browser bugs
+            window.setTimeout(function() {
+                window.location.href = dest;
+            }, 100);
+        });
+    </script>
+{% endif %}
+
+{% if sentiment_heatmap_uri is None %}
+{% else %}
+    <div class="row mt-4">
+        <h3>{{ sentiment_heatmap_title }}</h3>
+        <img src="/png/{{ sentiment_heatmap_uri }}" />
+    </div>
+{% endif %}
+
+{% if best_ten is None %}
+    <div class="row mt-4"><p>No top/bottom10 available.</p></div>
+{% else %}
+    <div class="row mt-4">
+        <h3>Top {{ n_top_bottom }}</h3>
+    </div>
+    <div class="row mt-4 col-md-auto">
+        <table>
+           {% include "topNbottomN.html" with series=best_ten piccie=top10_plot_uri %}
+        </table>
+    </div>
+
+    <div class="row mt-4">
+        <h3>Bottom {{ n_top_bottom }}</h3>
+    </div>
+    <div class="row mt-4 col-md-auto">
+        <table>
+            {% include "topNbottomN.html" with series=worst_ten piccie=bottom10_plot_uri %}
+        </table>
+    </div>
+{% endif %}
+
+{% if sector_breakdown_plot is None %}
+{% else %}
+    <div class="row mt-4">
+        <h3>Breakdown by sector</h3>
+    </div>
+    <div class="row mt-4">
+        <img src="{{ sector_breakdown_uri }}" />
+    </div>
+{% endif %}
+
+{% endblock %}

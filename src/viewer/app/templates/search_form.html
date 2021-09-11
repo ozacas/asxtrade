@@ -1,0 +1,14 @@
+
+{% extends "search.html" %}
+
+{% load crispy_forms_tags %}
+
+{% block searchform %}
+    <form class="col-4" action="{{ action_url }}" method="POST">
+    <table>
+       {% csrf_token %}
+       {{ form | crispy }}
+       <tr><td></td><td><input class="btn btn-success" type="submit" value="Submit"></td></tr>
+    </table>
+    </form>
+{% endblock %}

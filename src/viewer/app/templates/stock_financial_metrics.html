@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block header %}
+<div class="mt-4">
+    <h3>Earnings and revenue</h3>
+</div>
+
+{% include "user-messages.html" %}
+
+{% endblock %}
+
+{% block content %}
+<div class="mt-4">
+    {% if earnings_and_revenue_plot_uri %}
+    <img src="/png/{{ earnings_and_revenue_plot_uri }}" alt="Earnings and revenue plot" />
+    {% endif %}
+</div>
+
+{% if trending_metrics_plot_uri %}
+<div class="mt-4">
+    <h3>Linear trending metrics</h3>
+
+    <p>Only metrics which exhibit <b>a linear trend</b> over the entire financial metric timeframe are shown here to
+        ease cognitive burden.
+        Metrics with less than 4 years worth of data are not shown</p>
+
+    <img src="/png/{{ trending_metrics_plot_uri }}" alt="Linear trend financial metrics plot" />
+</div>
+{% endif %}
+
+{% if exp_growth_metrics_plot_uri %}
+<div class="mt-4">
+    <h3>Exponential growth metrics</h3>
+
+    <p>Only metrics with at least 5 data points are shown (ie. five years worth of data). Only financial metrics with
+        quality exponential growth
+        curve fits are shown.</p>
+
+    <img src="/png/{{ exp_growth_metrics_plot_uri }}" alt="Exponential Growth financial metrics plot" />
+</div>
+{% endif %}
+
+<div class="mt-4">
+    <h3>Metrics: cashflow, financials, balance sheet &amp; earnings</h3>
+
+    {% if data is not None %}
+    {{ data | tabulate_as_html }}
+    {% else %}
+    <p>No financial performance available.</p>
+    {% endif %}
+</div>
+
+<div class="mt-4">
+    <a href="/data/financial-metrics-{{ asx_code }}/excel" class="btn btn-primary">Download financial metrics</a>
+</div>
+
+{% endblock %}

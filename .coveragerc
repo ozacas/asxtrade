@@ -1,0 +1,6 @@
+[run]
+omit = 
+       # /usr/local/<anything> as its outside the app
+       /usr/local/*
+       # anything inside .tox is outside scope too
+       */.tox/*

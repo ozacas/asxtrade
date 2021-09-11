@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <p class="mt-4">
+        This visualisation shows the total earnings for each sector over time. Each trading day all companies in a given sector are
+        summed:
+        <ul>
+            <li>for each company: <tt>EPS * number of shares</tt> listed is computed</li>
+            <li>only companies with a positive EPS will contribute to each sector</li>
+            <li>both EPS and number of shares are obtained from the ASX data API</li>
+            <li>timeframe: {{ timeframe.description }}</li>
+            <li>all sectors results over the timeframe are shown below</li>
+            <li>as this is not a per-share measure you can more readily see changes in total earnings across sectors</li>
+        </ul>
+    </p>
+</div>
+
+<div class="row">
+    <img class="mt-4" src="/png/{{ plot_uri }}" alt="ASX Sector total earnings breakdown">
+</div>
+{% endblock %}

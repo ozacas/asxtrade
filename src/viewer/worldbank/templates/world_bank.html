@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<script>
+    $(function () {
+        $('[data-toggle="tooltip"]').tooltip()
+    })
+</script>
+
+<div class="row">
+    <h3>World Bank data visualiser</h3>
+</div>
+
+<div class="row">
+    The World Bank provides lots of data for most countries. You can:
+</div>
+
+<div class="row">
+    <ul class="mt-4">
+        <li>Visualise GDP, Inflation and many other metrics about a single country over time</li>
+        <li>Compare performance of several countries over time about a single metric</li>
+        <li>Compare several metrics on the one visualisation about a single country</li>
+    </ul>
+</div>
+
+<div class="row">
+    <h4>Supported analyses</h4>
+</div>
+
+<div class="row">
+    <table class="mt-4">
+        <tr>
+            <td>
+                <a href="/worldbank/scsm">
+                    <img src="{% static 'single-country-single-metric.png' %}" alt="Single country, single metric over time">
+                </a>
+            </td>
+
+            <td>
+                <a href="/worldbank/scm">
+                    <img src="{% static 'single-metric-across-countries.png' %}" alt="Single metric Country Comparative Analysis">
+                </a>
+            </td>
+          
+            <td>
+                <a href="/worldbank/scmm">
+                    <img src="{% static 'multi-metric-single-country.png' %}" alt="Multiple metrics about a single country on one plot">
+                </a>
+            </td>
+        </tr>
+
+        <tr>
+            <td>Single country, single metric over time</td>
+            <td>Multi-country, single metric over time</td>
+            <td>Multi-metric, single-country on one plot</td>
+        </tr>
+    </table>
+</div>
+
+<div class="row">
+    <h4 class="mt-4">Subject Areas</h4>
+</div>
+
+<div class="row">
+    <ol>
+        {% for topic in topics %}
+        <li data-toggle="tooltip" title="{{ topic.source_note }}">{{ topic.topic }}</li>
+        {% endfor %}
+    </ol>
+</div>
+
+<div class="row">
+    <h4>More information</h4>
+</div>
+
+<div class="row">
+    <ul>
+        <li><a href="https://data.worldbank.org/">WorldBank Data website</a></li>
+        <li><a href="https://datahelpdesk.worldbank.org/knowledgebase/articles/889392-about-the-indicators-api-documentation">Indicators API Documentation</a></li>
+    </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="row">
+    <form action="{{ action_url }}" method="POST">
+    <table>
+       {% csrf_token %}
+       {{ form.as_table }}
+       <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+    </table>
+    </form>
+</div>
+
+{% if plot_uri is not None %}
+<div class="row">
+    <h3 class="mt-4">{{ plot_title }}</h3>
+</div>
+
+<div class="row">
+    <p>Some key points to note about all datapoints shown:</p>
+    <ul>
+    {% for i in plot_fixed_datapoints %}
+        <li>{{ i }}</li>
+    {% endfor %}
+    </ul>
+</div>
+
+<div class="row">
+    <img class="mt-4" src="/png/{{ plot_uri }}" alt="{{ plot_title }}" />
+</div>
+{%endif %}
+
+{% endblock %}

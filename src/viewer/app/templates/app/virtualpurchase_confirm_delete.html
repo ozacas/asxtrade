@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row mt-4">
+         <h3>Deleting a purchase cannot be undone!</h3>
+    </div>
+    <div class="row mt-4">{{ object }}</div>
+         <p class="alert alert-warning mt-4">Please confirm.</p>
+    </div>
+    <div class="row mt-4">
+            <form action="" method="post" class="mt-4">
+                {% csrf_token %}
+                <p>
+                <input class="btn btn-link" 
+                       type="button" value="Cancel" 
+                       onclick="window.history.go(-1);"/>
+                <input class="btn btn-danger" type="submit" value="Yes, delete it!"/>
+                </p>
+            </form>
+    </div>
+{% endblock %}

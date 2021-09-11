@@ -1,0 +1,111 @@
+{% load static %}
+{% load menubuilder %}
+<html>
+
+<head>
+    <title>ASX Viewer</title>
+    <link rel="stylesheet" 
+          href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" 
+          integrity="sha384-B0vP5xmATw1+K9KRQjQERJvTumQW0nPEzvF6L/Z6nronJ3oUOFUFpCjEUQouq2+l" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/css/bootstrap-select.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js" 
+            integrity="sha384-Piv4xVNRyMGpqkS2by6br4gNJ7DXjqk09RmUpJ8jgGtD7zP9yug3goQfGII0yAns" crossorigin="anonymous"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/js/bootstrap-select.min.js"></script>
+
+    <link rel="stylesheet" href="{% static 'app.css' %}">
+
+    <!-- XDSoft DateTimePicker -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.min.css"
+        integrity="sha256-DOS9W6NR+NFe1fUhEE0PGKY/fubbUCnOfTje2JMDw3Y=" crossorigin="anonymous" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.full.min.js"
+        integrity="sha256-FEqEelWI3WouFOo2VWP/uJfs1y8KJ++FLh2Lbqc8SJk=" crossorigin="anonymous"></script>
+
+    <script type="text/javascript" src="{% static 'site.js' %}"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-sm bg-light">
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a class="nav-link" href="/">ASX Viewer</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#">Help</a>
+            </li>
+            <li class="nav-item">
+                {%if user.is_authenticated %}
+                <a class="nav-link" href="/accounts/logout">Logout</a>
+                {% else %}
+                <a class="nav-link" href="/accounts/login">Login</a>
+                {% endif %}
+            </li>
+        </ul>
+    </nav>
+
+    <table>
+        <tr valign="top">
+            <td>
+                <div class="menubar">
+                    <h3>Find</h3>
+                    <ul class="nav flex-column">{% menu search %}
+                        {% for item in menuitems %}
+                        <li class="nav-item">
+                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}"
+                             {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <h3>Show</h3>
+                    <ul class="nav flex-column">{% menu stats %}
+                        {% for item in menuitems %}
+                        <li class="nav-item">
+                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}" 
+                              {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <h3>Macroeconomy</h3>
+                    <ul class="nav flex-column">{% menu macroeconomics %}
+                        {% for item in menuitems %}
+                        <li class="nav-item">
+                            <a class="nav-link small" href="{{ item.url }}" title="{{ item.title|escape }}" 
+                               {% if item.current %} class='current' {% endif %}>{{ item.title }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </td>
+            <td>
+                <div class="content container">
+                    <div class="row">
+                        {%if title %}<h3>{{ title }}</h3>{% endif %}
+                    </div>
+
+                    {% block header %}
+                    {% endblock %}
+
+                    {% block searchform %}
+                    {% endblock %}
+
+                    {%if timeframe %}<div class="alert alert-secondary info">Unless stated otherwise, timeframe is: {{ timeframe.description }}</div>{% endif %}
+
+                    {% block content %}
+                    {% endblock %}
+
+                    {% block footer %}
+                        {% include "user-messages.html" %}
+                    {% endblock %}
+                </div>
+            </td>
+        </tr>
+
+        
+    </table>
+</body>
+
+</html>

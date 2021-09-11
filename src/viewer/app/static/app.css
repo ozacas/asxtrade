@@ -1,0 +1,79 @@
+.asteriskField {
+    display: none;
+}
+
+h2.asxtrade: {
+  margin-top: 25px;
+}
+
+img.stock {
+  margin-top: 25px;
+  margin-bottom: 25px;
+}
+
+div.menubar {
+  margin-right: 25px;
+}
+
+td.padded {
+    padding:10px 10px;
+}
+
+tr.small {
+  font-size: 8pt;
+}
+
+th.top {
+  vertical-align: top;
+}
+
+span.unimportant {
+  color: grey;
+  size: -2;
+}
+
+div.info-table {
+  margin-bottom: 10px;
+}
+
+a.button {
+    display: inline-block;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 1px 6px;
+
+    font: 13.3333px Arial;
+    text-rendering: auto;
+    text-align: center;
+    text-transform: none;
+    text-decoration: none;
+    text-indent: 0;
+    text-shadow: none;
+    letter-spacing: normal;
+    word-spacing: normal;
+    color: buttontext;
+
+    border: 2px outset buttonface;
+    border-image: initial;
+
+    background-color: buttonface;
+
+    -webkit-appearance: button;
+    -moz-appearance: button;
+    appearance: button;
+
+    cursor: default;
+}
+
+a.button:active { border-style: inset; }
+
+/* nice colours for row backgrounds in stock trends table */
+tr.recent-downward-trend { background: #ff6961; }
+tr.recent-upward-trend { background: #c2ffe2; }
+tr.none { background: white; }
+
+/* hide bullets from messages */
+li.alert {
+  list-style-type: none;
+  margin-left: 0px;
+}

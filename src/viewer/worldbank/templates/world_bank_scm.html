@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block searchform %}
+    <table>
+        <tr><td>
+        <form action="{{ action_url }}" method="POST" id="WorldBankForm" indicator-autocomplete-uri="{% url 'ajax-worldbank-scm-autocomplete' %}">
+            {% csrf_token %}
+            {{ form.as_table }}
+            <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+        </form></td><td><span id="loading"></span></td></tr>
+    </table>
+
+    <!-- IDs below must match form ID's above -->
+    <script>
+        $("#id_topic").on("change", world_bank_ajax_call);      
+        $("#id_countries").on("change", world_bank_ajax_call);
+    </script>
+{% endblock %}
+
+{% block content %}
+   {% if indicator_plot_uri is not None %}
+   <h4 class="mt-4">{{ indicator_plot_title }}</h4>
+
+   <img src="/png/{{ indicator_plot_uri }}" alt="Indicator plot">
+
+   <p>
+       Data source: {{ indicator.source_organisation |urlize }}
+   </p>
+
+   <p>
+       {{ indicator.source_note |urlize }}
+   </p>
+   {% endif %}
+{% endblock %}

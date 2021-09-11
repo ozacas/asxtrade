@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <p class="mt-4">
+        This visualisation shows the number of stocks undergoing a daily price change (in percentage terms)
+        amongst fixed price change bins across the past {{ n_days }} trading days. Stocks moving &lt;1e-6%
+        are not shown ie. barely moving stocks. Bins with few stocks are shown in blue, bins with lots
+        of stocks are shown in yellow and the number present are displayed in the centre of each bin.
+        The data may be downloaded in Excel-format using the button below the plot.
+    </p>
+
+    <img class="market-sentiment mt-4" src="/png/{{ sentiment_uri }}" alt="ASX market sentiment plot">
+
+    <span class="row">
+        <a href="/data/market_sentiment/csv" class="btn btn-primary">Download CSV</a>&nbsp;&nbsp;
+        <a href="/data/market_sentiment/excel" class="btn btn-primary">Download Excel</a>
+    </span>
+</div>
+
+{% if best_ten is None %}
+{% else %}
+<h3 class="mt-4">Top {{ n_top_bottom }}</h3>
+
+<p>
+    Best performing stocks across the entire observation period (in percentage terms).
+    May be used to identify stocks increasing in price more than any other shown.
+</p>
+
+<div class="col-md-auto">
+    <table>
+        {% include "topNbottomN.html" with series=best_ten %}
+    </table>
+</div>
+
+<h3 class="mt-4">Bottom {{ n_top_bottom }}</h3>
+
+<div class="col-md-auto">
+    <table>
+        {% include "topNbottomN.html" with series=worst_ten %}
+    </table>
+</div>
+{% endif %}
+
+{% if sector_performance_uri is None %}
+{% else %}
+<div class="row">
+    <h3 class="mt-4">{{ sector_performance_title }}</h3>
+
+    <ul>
+        <li>This figure shows all ASX sectors with the average cumulative change (in percentage terms) over the
+            timeframe</li>
+        <li>Shows sector-wide average stock performance over time</li>
+    </ul>
+
+    <img class="sector-performance-plot mt-4" src="/png/{{ sector_performance_uri }}"
+        alt="ASX sector performance plot" />
+</div>
+
+<div class="row">
+    <a href="/show/recent_sector_performance" class="btn btn-primary">Recent sector performance</a>
+</div>
+{% endif %}
+
+{% if market_cap_distribution_uri is None %}
+{% else %}
+<div class="row">
+    <h3 class="mt-4">Distribution of ASX market cap</h3>
+    <ul>
+        <li>Small cap are those ASX listed stocks with a market cap (shares * last_price) of less than $AUD 2 billion
+        </li>
+        <li>Medium cap companies have a market cap between 2 and 10 billion $AUD</li>
+        <li>Large cap have a market cap in excess of 10 billion $AUD</li>
+        <li>This figure shows four dates over the timeframe: {{ sector_timeframe.description }}</li>
+        <li>Latest date, earliest date, 30 days ago, 90 days ago (approx. depending on trading days where data is
+            available)</li>
+        <li>Note that each market cap is shown on a log10 scale: to help more clearly show changes</li>
+        <li>This visualisation may shed light on where money/growth is occuring: large, medium or small companies</li>
+    </ul>
+    <img src="/png/{{ market_cap_distribution_uri }}" alt="ASX market cap distribution" />
+</div>
+{% endif %}
+
+{% endblock %}

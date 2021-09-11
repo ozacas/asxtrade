@@ -1,0 +1,32 @@
+{% load static %}
+
+{% comment Assumes a variable series (eg. top10/bottom 10) with stocks is to be emitted 5 items per table row %}{% endcomment %}
+<tr><td class="small">{{ date }}</td><td>
+{% for index, value in series.items %}
+        <a href="/watchlist/{{ index }}?next={{ request.path }}">
+          {% if index in watched %}
+              <img src="{% static "star.png" %}" width="12" />
+          {% else %}
+              <img src="{% static "empty-star.png" %}" width="12" />
+          {% endif %}
+        </a>
+        <a href="/show/{{ index }}">{{ index }}<span class="small" style="color: gray">&nbsp;{{ value|floatformat }}%&nbsp;</span>&nbsp;</a>
+        {% if forloop.counter|divisibleby:5 %}</td></tr><tr><td></td><td>{% endif %}
+{% endfor %}
+</td></tr>
+
+{% if piccie is not None %}
+<tr>
+    <td></td>
+    <td>
+        <img class="mt-4" src="/png/{{ piccie }}" alt="cumulative returns" />
+    </td>
+</tr>
+<tr>
+    <ul>
+        <li>Only moves with a magnitude exceeding &gt; 5% are shown each day, to reduce visual clutter</li>
+        <li>Total negative moves by selected stocks (in percentage terms) each day are shown as <i class="badge badge-danger">a red bar</i></li>
+        <li>Total positive moves by selected stocks (in percentage terms) each day are shown as <i class="badge badge-success">a green bar</i></li>
+    </ul>
+</tr>
+{% endif %}

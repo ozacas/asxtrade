@@ -1,0 +1,24 @@
+
+{% extends "base.html" %}
+
+{% block content %}
+    {%if title is None %}
+    <div class="row"><h3>Update purchase details</h3></div>
+    {% endif %}
+    
+    <div class="row mt-4" id="form">
+    
+    <form action="{{ action_url }}" method="POST">
+        <table>
+           {% csrf_token %}
+           {{ form.as_table }}
+           <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+        </table>
+    </form>
+    <script>
+    $(function () {
+      $("#id_buy_date").datetimepicker({ format: 'Y-m-d' });
+    });
+    </script>
+    </div>
+{% endblock %}

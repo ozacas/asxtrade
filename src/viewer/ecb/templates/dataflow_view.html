@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="row">
+        <h3 class="mt-4">Search dataset: {{ dataflow.description }}</h3>
+
+        <form action="{{ action_url }}" method="POST">
+            <table>
+            {% csrf_token %}
+            {{ form.as_table }}
+            <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+            </table>
+        </form>
+    </div>
+
+    {% include 'user-messages.html' %}
+
+    <div class="row">
+        <!-- some titles are too wide for the image so we put it in a paragraph instead -->
+        <p class="mt-4">
+            {{ plot_title}}
+        </p>
+        {% if plot_uri is not None %}
+        <img src="/png/{{ plot_uri }}" alt="ECB dataset plot" />
+        {% endif %}
+    </div>
+
+    <div class="row">
+        <h3 class="mt-4">Filter performance of chosen values</h3>
+
+        <p>The above form values may be throwing away the majority of the data. As each form setting is applied, we report
+            how it impacts the number of datapoints remaining. In this way you can receive assistance as to what form values provide data.
+        </p>
+    </div>
+
+    <div class="row">
+        <table class="mt-4">
+            <tr><th>Key</th><th>Value</th><th class="padded">Rows at start&nbsp;</th><th class="padded">Rows at end</th><th>Unique values before filter</th></tr>
+            {% for fp in filter_performance %}
+            <tr><td class="padded">{{ fp.0 }}</td><td class="padded">{{ fp.1 }}</td><td class="padded" align="right">{{ fp.2 }}</td><td class="padded" align="right">{{ fp.3 }}</td><td>{{ fp.4 }}</td></tr>
+            {% endfor %}
+        </table>
+    </div>
+{% endblock %}

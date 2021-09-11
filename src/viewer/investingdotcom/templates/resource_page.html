@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block searchform %}
+    <form action="{{ action_url }}" method="POST" id="BondForm" country-bonds-autocomplete="{% url 'country-bonds-autocomplete' %}">
+    <table>
+       {% csrf_token %}
+       {{ form.as_table }}
+       <tr><td></td><td><input type="submit" value="Submit"></td></tr>
+    </table>
+    </form>
+{% endblock %}
+
+{% block content %}
+{% if plot_uri is not None %}
+<div class="row">
+    <h3>{{ plot_title }}</h3>
+
+    <img src="{{ plot_uri }}" alt="plot for selected form values" />
+</div>
+{% endif %}
+{% endblock %}

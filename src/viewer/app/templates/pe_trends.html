@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <p class="mt-4">
+        This visualisation shows the average PE per sector over the timeframe. Can be used to identify expensive (or
+        cheap) sectors within the market as a whole. Average PE
+        is approximately 15 in the long run. Higher PE indicates an expensive market, all other things being equal. For
+        more information: <a
+            href="https://www.commsec.com.au/education/learn/choosing-investments/what-is-price-to-earnings-pe-ratio.html">CommSec</a>
+    </p>
+
+    <ul>
+        <li>Only {{ n_stocks }} stocks were considered over the timeframe</li>
+        <li>Stocks with zero (or negative) average PE are ignored - this resulted in only {{ n_stocks_with_pe }} stocks
+            remaining</li>
+        <li>Timeframe: {{ timeframe.description }}</li>
+        <li>The <i>Not Applic</i> category often contains ETFs so as a basket of stocks, can be misleading as far as EPS
+            and P/E are concerned</li>
+        <li>Stocks participating in a given sector can be found via <a href="{% url 'sector-search' %}">Find By
+                Sector</a></li>
+    </ul>
+
+    <img class="mt-4" src="/png/{{ sector_pe_plot_uri }}" alt="ASX Sector PE breakdown">
+
+</div>
+
+<div class="row">
+    <h3 class="mt-4">Earnings per share</h3>
+</div>
+
+<div class="row">
+    <p class="mt-4">
+        The above plot show price to earnings ratio, but what is happening to earnings at the same time?
+    </p>
+
+    <ul>
+        <li>All stocks are considered for this plot</li>
+        <li>Each plot represents the sum of all EPS from all companies designated to a given sector</li>
+        <li>Negative values are possible if more stocks are underperforming than generating earnings as has been common
+            during the COVID-19 pandemic</li>
+    </ul>
+
+    <img class="mt-4" src="/png/{{ sector_eps_plot_uri }}" alt="ASX Sector EPS breakdown">
+
+    <a href="/show/total-earnings" class="btn btn-primary">Show total earnings</a>&nbsp;<a href="/data/eps-per-sector/csv" class="btn btn-primary">Download EPS data</a>
+</div>
+
+<div class="row">
+    <h3 class="mt-4">Market wide average P/E (smoothed)</h3>
+</div>
+
+<div class="row">
+    <ul>
+        <li>Plot a smoothed line representing the average daily P/E of all positive P/E companies over the timeframe
+        </li>
+        <li>Provided for comparison with a given company or sector for comparison</li>
+        <li>This plot is the daily average of {{ n_stocks_with_pe }} stocks</li>
+    </ul>
+    <img class="mt-4" src="/png/{{ market_pe_plot_uri }}" alt="ASX market-wide P/E plot">
+</div>
+
+<div class="row">
+    <h3 class="mt-4">Top EPS positive contributors per sector as at {{timeframe.most_recent_date}}</h3>
+</div>
+
+<div class="row">
+    {% if sector_positive_top_contributors_eps_uri is None %}
+    {% else %}
+    <img class="mt-4" src="/png/{{ sector_positive_top_contributors_eps_uri }}" alt="Top EPS contributors per sector" />
+    {% endif %}
+</div>
+{% endblock %}

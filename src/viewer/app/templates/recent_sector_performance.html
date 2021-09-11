@@ -1,0 +1,90 @@
+{% extends "search.html" %}
+
+{% block content %}
+<div class="row mt-4">
+    <form action="{{ action_url }}" method="POST">
+        <table>
+            {% csrf_token %}
+            {{ form.as_table }}
+            <tr>
+                <td></td>
+                <td><input type="submit" value="Submit"></td>
+            </tr>
+        </table>
+    </form>
+</div>
+
+<div class="row mt-4">
+    <p>
+        This visualisation shows:
+    </p>
+
+    <ul>
+        <li>Distribution of percentage gains/losses for the chosen stocks each trading day</li>
+        <li>Useful for observing systematic changes in stock prices among a group of stocks</li>
+        <li>Three different ways are provided to normalise the data to enable easier comparison:
+            <table>
+                <tr>
+                    <th></th>
+                    <th>Method</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>1</td>
+                    <td>None</td>
+                    <td>Perform no conversion of data before display</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>Min/Max scaling</td>
+                    <td>Convert each daily data into the range [0..1] 0 being the most down stock on the day and 1 being
+                        most up</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>Divide by max</td>
+                    <td>Scale each data point to at most 1.0 (the maximum upward % change on the day)</td>
+                </tr>
+            </table>
+        </li>
+        <li>Although permitted, this visualisation is practically limited to a month or less of data</li>
+    </ul>
+</div>
+
+{% if plot_uri %}
+<div class="row mt-4">
+    <img class="market-sentiment" src="/png/{{ plot_uri }}" alt="ASX sector recent performance box plot" />
+</div>
+
+<div class="row mt-4">
+    <h3>Winning stocks</h3>
+</div>
+
+<div class="row mt-4">
+    <p>
+        Stocks which beat the mean daily sector performance (% change) are reported
+        here. Only the chosen timeframe is considered (past {{ n_days }} days). Note that stocks
+        which post a major fall and then recover (but do not post a positive return over the period)
+        will also not be shown.
+    </p>
+</div>
+
+<div class="mt-4 row">
+    <table>
+        <tr>
+            <th>Stock</th>
+            <th>Wins</th>
+            <th>Total move (%)</th>
+        </tr>
+        {% for asx_code, n_wins, total_move_pct in winning_stocks %}
+        <tr>
+            <td>{% clickable_stock asx_code user=request.user.username next=request.path %}</td>
+            <td>{{ n_wins }}</td>
+            <td>{{ total_move_pct |floatformat }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}
