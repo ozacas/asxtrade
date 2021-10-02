@@ -39,6 +39,7 @@ def melt_dataframes(dfs: tuple) -> pd.DataFrame:
 
 def desired_stocks():
     available_stocks = set(db.asx_company_details.distinct("asx_code"))
+    print(f"Found {len(available_stocks)} available stocks.")
     gen_time = datetime.today() - timedelta(days=30)
     month_ago = ObjectId.from_datetime(gen_time)
     recently_updated_stocks = set(
@@ -50,7 +51,9 @@ def desired_stocks():
         ]
     )
 
-    return available_stocks.difference(recently_updated_stocks)
+    ret = available_stocks.difference(recently_updated_stocks)
+    print(f"Found {len(ret)} desired stocks to process.")
+    return ret
 
 
 def update_all_metrics(df: pd.DataFrame, asx_code: str) -> int:
