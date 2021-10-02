@@ -418,8 +418,9 @@ def plot_market_cap_distribution(ld: LazyDictionary) -> p9.ggplot:
     assert set(df.columns).intersection(set(["market", "market_cap", "bin"])) == set(
         ["market", "market_cap", "bin"]
     )
+    pos_market_cap_only = df[df["market_cap"] > 0.0]
     plot = (
-        p9.ggplot(df)
+        p9.ggplot(pos_market_cap_only)
         + p9.geom_boxplot(p9.aes(x="market", y="market_cap"))
         + p9.facet_wrap("bin", scales="free_y")
         + p9.scales.scale_y_log10()
@@ -917,32 +918,37 @@ def plot_monthly_returns(
 def plot_sector_monthly_mean_returns(ld: LazyDictionary) -> dict:
     all_stocks = ld["monthly_returns_by_stock"]
     ret = {}
-    plots = []
-    plots.append(
-        ("All stock average", all_stocks.mean(axis=1).to_frame(name="average"))
-    )
     ss = ld["stocks_by_sector"]
+    all_stock_average_df = all_stocks.mean(axis=1).to_frame(name="average")
+    all_stock_average_df["dataset"] = "All stock average"
+    final_df = all_stock_average_df
     # print(ss)
     for current_sector in ss["sector_name"].unique():
         # print(current_sector)
         wanted_stocks = set(ss[ss["sector_name"] == current_sector]["asx_code"])
         # print(wanted_stocks)
-        df = all_stocks.filter(items=wanted_stocks, axis="columns")
-        # print(df)
-        plots.append(
-            (f"Sector: {current_sector}", df.mean(axis=1).to_frame(name="average"))
+        df = (
+            all_stocks.filter(items=wanted_stocks, axis="columns")
+            .mean(axis=1)
+            .to_frame(name="average")
         )
+        df["dataset"] = current_sector
+        final_df = final_df.append(df)
 
-    for title, df in plots:
-        # print(title)
-        # print(df)
-        plot = p9.ggplot(df, p9.aes(x="df.index", y="average")) + p9.geom_bar(
-            stat="identity"
-        )
-        ret[title] = cache_plot(
-            f"{title}-monthly-mean-returns",
-            lambda ld: user_theme(
-                plot, y_axis_label="Average percent return per month", title=title
-            ),
-        )
+    final_df["date"] = pd.to_datetime(final_df.index, format="%Y-%m-%d")
+    plot = (
+        p9.ggplot(final_df, p9.aes(x="date", y="average"))
+        + p9.geom_bar(stat="identity")
+        + p9.facet_wrap("~dataset", ncol=2, scales="free_y")
+    )
+    ret["month-by-month-average-returns"] = cache_plot(
+        "monthly-mean-returns",
+        lambda ld: user_theme(
+            plot,
+            y_axis_label="Average percent return per month",
+            figure_size=(12, 10),
+            subplots_adjust={"wspace": 0.15},
+            axis_text_x=p9.element_text(angle=30, size=7),
+        ),
+    )
     return ret
