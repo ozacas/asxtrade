@@ -937,7 +937,7 @@ def plot_sector_monthly_mean_returns(ld: LazyDictionary) -> dict:
 
     final_df["date"] = pd.to_datetime(final_df.index, format="%Y-%m-%d")
     plot = (
-        p9.ggplot(final_df, p9.aes(x="date", y="average"))
+        p9.ggplot(final_df, p9.aes(x="date", y="average", fill="average"))
         + p9.geom_bar(stat="identity")
         + p9.facet_wrap("~dataset", ncol=2, scales="free_y")
     )
@@ -949,6 +949,7 @@ def plot_sector_monthly_mean_returns(ld: LazyDictionary) -> dict:
             figure_size=(12, 10),
             subplots_adjust={"wspace": 0.15},
             axis_text_x=p9.element_text(angle=30, size=7),
+            asxtrade_want_fill_continuous=True,
         ),
     )
     return ret
