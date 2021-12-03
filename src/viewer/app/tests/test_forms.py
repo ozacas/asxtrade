@@ -24,18 +24,18 @@ def test_is_not_blank():
 @pytest.mark.django_db # needs access to the database to validate sector name
 def test_is_valid_sector(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
     stocks_by_sector.cache_clear() # prevent cache pollution from ruining test
-    for item1, item2 in SectorSearchForm.SECTOR_CHOICES:
+    for item1, item2 in CompanySearchForm.SECTOR_CHOICES:
         # the database is not populated so we cant check return value, check for an exception
         assert len(item1) == len(item2) and len(item1) > 0
         is_valid_sector(item1)
 
 
-@pytest.mark.django_db
-def test_sector_search_form(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
-    fm1 = SectorSearchForm(data={"sector": SectorSearchForm.SECTOR_CHOICES[0][1]})
-    assert fm1.is_valid()
-    fm2 = SectorSearchForm(data={})
-    assert not fm2.is_valid()
+#@pytest.mark.django_db
+#def test_sector_search_form(comp_deets): # pylint: disable=unused-argument,redefined-outer-name
+#    fm1 = SectorSearchForm(data={"sector": SectorSearchForm.SECTOR_CHOICES[0][1]})
+#    assert fm1.is_valid()
+#    fm2 = SectorSearchForm(data={})
+#    assert not fm2.is_valid()
 
 def test_mover_search_form():
     fm1 = MoverSearchForm(data={})
