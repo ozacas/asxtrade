@@ -17,8 +17,7 @@
         <li>Timeframe: {{ timeframe.description }}</li>
         <li>The <i>Not Applic</i> category often contains ETFs so as a basket of stocks, can be misleading as far as EPS
             and P/E are concerned</li>
-        <li>Stocks participating in a given sector can be found via <a href="{% url 'sector-search' %}">Find By
-                Sector</a></li>
+        <li>Stocks participating in a given sector can be found via <a href="{% url 'by-name' %}">Find By name, activity or sector</a></li>
     </ul>
 
     <img class="mt-4" src="/png/{{ sector_pe_plot_uri }}" alt="ASX Sector PE breakdown">

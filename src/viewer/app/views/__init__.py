@@ -8,7 +8,6 @@ from app.views.core import (
 )
 from app.views.search import (
     mover_search,
-    sector_search,
     company_search,
     dividend_search,
     market_cap_search,

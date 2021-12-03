@@ -830,7 +830,10 @@ def plot_sector_field(df: pd.DataFrame, field, n_col=3):
     # print(df.columns)
     # assert set(df.columns) == set(['sector', 'date', 'mean_pe', 'sum_pe', 'sum_eps', 'mean_eps', 'n_stocks'])
     n_unique_sectors = df["sector"].nunique()
-    df["date"] = pd.to_datetime(df["date"])
+    df = df.dropna(axis=0, subset=[field])
+    df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
+    # print(df)
+
     plot = (
         p9.ggplot(df, p9.aes("date", field, group="sector", color="sector"))
         + p9.geom_line(size=1.0)
@@ -924,15 +927,15 @@ def plot_sector_monthly_mean_returns(ld: LazyDictionary) -> dict:
     final_df = all_stock_average_df
     # print(ss)
     for current_sector in ss["sector_name"].unique():
-        # print(current_sector)
+        #print(current_sector)
         wanted_stocks = set(ss[ss["sector_name"] == current_sector]["asx_code"])
-        # print(wanted_stocks)
-        df = (
-            all_stocks.filter(items=wanted_stocks, axis="columns")
-            .mean(axis=1)
-            .to_frame(name="average")
-        )
+        #print(wanted_stocks)
+        filtered_stocks = all_stocks.filter(items=wanted_stocks, axis="columns").dropna(axis='columns', how='all').dropna(axis='rows', how='all')
+        if current_sector == "Class Pend":
+           print(filtered_stocks)
+        df = filtered_stocks.mean(axis=1).to_frame(name="average")
         df["dataset"] = current_sector
+        print(df)
         final_df = final_df.append(df)
 
     final_df["date"] = pd.to_datetime(final_df.index, format="%Y-%m-%d")

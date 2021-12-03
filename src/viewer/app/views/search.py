@@ -14,7 +14,6 @@ from app.messages import info
 from app.forms import (
     DividendSearchForm,
     MomentumSearchForm,
-    SectorSearchForm,
     MoverSearchForm,
     CompanySearchForm,
     MarketCapSearchForm,
@@ -136,100 +135,6 @@ class DividendYieldSearch(
 dividend_search = DividendYieldSearch.as_view()
 
 
-class SectorSearchView(DividendYieldSearch):
-    DEFAULT_SECTOR = "Communication Services"
-    form_class = SectorSearchForm
-    action_url = "/search/by-sector"
-    template_name = "sector_search_form.html"
-    ld = LazyDictionary()
-
-    def additional_context(self, context):
-        d = super().additional_context(context)
-        ld = self.ld
-        sector = ld.get(
-            "sector", self.DEFAULT_SECTOR
-        )  # default to Comms. Services if not specified'
-        sector_id = ld.get("sector_id", None)
-        d.update(
-            {
-                # to highlight top10/bottom10 bookmarks correctly
-                "title": "Find by company sector",
-                "sector_name": sector,
-                "sector_id": sector_id,
-                "sentiment_heatmap_title": "{} sector sentiment".format(sector),
-                "sector_performance_plot_uri": ld.get("sector_performance_plot", None),
-                "timeframe_end_performance": timeframe_end_performance(ld),
-            }
-        )
-        return d
-
-    def recalc_queryset(self, **kwargs):
-        def sector_performance(ld: LazyDictionary) -> str:
-            sector = ld.get("sector")
-            return cache_plot(
-                f"{sector}-sector-performance",
-                lambda ld: plot_sector_performance(ld["sector_performance_df"], sector)
-                if ld["sector_performance_df"] is not None
-                else None,
-                datasets=ld,
-                dont_cache=True,
-            )
-
-        # user never run this view before?
-        if kwargs == {}:
-            print("WARNING: no form parameters specified - returning empty queryset")
-            return Quotation.objects.none()
-
-        sector = kwargs.get("sector", self.DEFAULT_SECTOR)
-        sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
-        wanted_stocks = all_sector_stocks(sector)
-        print("Found {} stocks matching sector={}".format(len(wanted_stocks), sector))
-        report_top_n = kwargs.get("report_top_n", None)
-        report_bottom_n = kwargs.get("report_bottom_n", None)
-        self.timeframe = Timeframe(past_n_days=90)
-        ld = LazyDictionary()
-        ld["sector"] = sector
-        ld["sector_id"] = sector_id
-        ld["sector_companies"] = wanted_stocks
-        ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, self.timeframe)
-        ld["sector_performance_df"] = lambda ld: make_sector_performance_dataframe(
-            ld["cip_df"], ld["sector_companies"]
-        )
-        ld["sector_performance_plot"] = lambda ld: sector_performance(ld)
-        self.ld = ld
-        if report_top_n is not None or report_bottom_n is not None:
-            cip_sum = self.ld["cip_df"].transpose().sum().to_frame(name="percent_cip")
-
-            # print(cip_sum)
-            top_N = (
-                set(cip_sum.nlargest(report_top_n, "percent_cip").index)
-                if report_top_n is not None
-                else set()
-            )
-            bottom_N = (
-                set(cip_sum.nsmallest(report_bottom_n, "percent_cip").index)
-                if report_bottom_n is not None
-                else set()
-            )
-            wanted_stocks = top_N.union(bottom_N)
-        print("Requesting valid quotes for {} stocks".format(len(wanted_stocks)))
-        quotations_as_at, actual_mrd = valid_quotes_only(
-            "latest", ensure_date_has_data=True
-        )
-        ret = quotations_as_at.filter(asx_code__in=wanted_stocks)
-        if len(ret) < len(wanted_stocks):
-            got = set([q.asx_code for q in self.qs.all()])
-            missing_stocks = wanted_stocks.difference(got)
-            warning(
-                self.request,
-                f"could not obtain quotes for all stocks as at {actual_mrd}: {missing_stocks}",
-            )
-        return ret
-
-
-sector_search = SectorSearchView.as_view()
-
-
 class MoverSearch(DividendYieldSearch):
     form_class = MoverSearchForm
     action_url = "/search/movers"
@@ -270,21 +175,108 @@ mover_search = MoverSearch.as_view()
 
 
 class CompanySearch(DividendYieldSearch):
+    DEFAULT_SECTOR = "Communication Services"
+    ld = LazyDictionary()
     form_class = CompanySearchForm
     action_url = "/search/by-company"
 
     def additional_context(self, context):
+        ld = self.ld
+        sector = ld.get(
+            "sector", self.DEFAULT_SECTOR
+        )  # default to Comms. Services if not specified'
+        sector_id = ld.get("sector_id", None)
         return {
             "title": "Find by company name or activity",
             "sentiment_heatmap_title": "Heatmap for named companies",
+            # to highlight top10/bottom10 bookmarks correctly
+            "title": "Find by company sector",
+            "sector_name": sector,
+            "sector_id": sector_id,
+            "sentiment_heatmap_title": "{} sector sentiment".format(sector),
+            "sector_performance_plot_uri": ld.get("sector_performance_plot", None),
+            "timeframe_end_performance": timeframe_end_performance(ld),
         }
 
+    def sector_performance(self, ld: LazyDictionary) -> str:
+        sector = ld.get("sector")
+        return cache_plot(
+            f"{sector}-sector-performance",
+            lambda ld: plot_sector_performance(ld["sector_performance_df"], sector)
+            if ld["sector_performance_df"] is not None
+            else None,
+            datasets=ld,
+            dont_cache=True,
+        )
+
+    def filter_top_bottom(
+        self, ld: LazyDictionary, wanted_stocks, report_top_n, report_bottom_n
+    ) -> set:
+        if report_top_n is not None or report_bottom_n is not None:
+            cip_sum = self.ld["cip_df"].transpose().sum().to_frame(name="percent_cip")
+
+            # print(cip_sum)
+            top_N = (
+                set(cip_sum.nlargest(report_top_n, "percent_cip").index)
+                if report_top_n is not None
+                else set()
+            )
+            bottom_N = (
+                set(cip_sum.nsmallest(report_bottom_n, "percent_cip").index)
+                if report_bottom_n is not None
+                else set()
+            )
+            wanted_stocks = top_N.union(bottom_N)
+        else:
+            return wanted_stocks
+
     def recalc_queryset(self, **kwargs):
-        if kwargs == {} or not any(["name" in kwargs, "activity" in kwargs]):
+        if kwargs == {} or not any(
+            ["name" in kwargs, "activity" in kwargs, "sector" in kwargs]
+        ):
             return Quotation.objects.none()
+
         wanted_name = kwargs.get("name", "")
         wanted_activity = kwargs.get("activity", "")
         matching_companies = find_named_companies(wanted_name, wanted_activity)
+
+        sector = kwargs.get("sector", self.DEFAULT_SECTOR)
+        sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
+        sector_stocks = all_sector_stocks(sector)
+        print(type(matching_companies))
+        print(type(sector_stocks))
+        wanted_stocks = matching_companies.union(sector_stocks)
+        print("Found {} matching stocks {}".format(len(wanted_stocks), sector))
+        report_top_n = kwargs.get("report_top_n", None)
+        report_bottom_n = kwargs.get("report_bottom_n", None)
+        self.timeframe = Timeframe(past_n_days=90)
+        ld = LazyDictionary()
+        ld["sector"] = sector
+        ld["sector_id"] = sector_id
+        ld["sector_companies"] = wanted_stocks
+        ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, self.timeframe)
+        ld["sector_performance_df"] = lambda ld: make_sector_performance_dataframe(
+            ld["cip_df"], ld["sector_companies"]
+        )
+        ld["sector_performance_plot"] = lambda ld: self.sector_performance(ld)
+        self.ld = ld
+        wanted_stocks = self.filter_top_bottom(
+            ld, wanted_stocks, report_top_n, report_bottom_n
+        )
+
+        print("Requesting valid quotes for {} stocks".format(len(wanted_stocks)))
+        quotations_as_at, actual_mrd = valid_quotes_only(
+            "latest", ensure_date_has_data=True
+        )
+        ret = quotations_as_at.filter(asx_code__in=wanted_stocks)
+        if len(ret) < len(wanted_stocks):
+            got = set([q.asx_code for q in self.qs.all()])
+            missing_stocks = wanted_stocks.difference(got)
+            warning(
+                self.request,
+                f"could not obtain quotes for all stocks as at {actual_mrd}: {missing_stocks}",
+            )
+
         print("Showing results for {} companies".format(len(matching_companies)))
         ret, _ = latest_quote(tuple(matching_companies))
         return ret
@@ -461,10 +453,10 @@ class MomentumSearch(DividendYieldSearch):
         return ret
 
     def recalc_queryset(self, **kwargs):
-        n_days = kwargs.get("n_days")
+        n_days = kwargs.get("n_days", 30)
         what_to_search = kwargs.get("what_to_search")
-        period1 = kwargs.get("period1")
-        period2 = kwargs.get("period2")
+        period1 = kwargs.get("period1", 20)
+        period2 = kwargs.get("period2", 200)
         stocks_to_consider = (
             all_stocks()
             if what_to_search == "all_stocks"

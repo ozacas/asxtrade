@@ -13,32 +13,6 @@ def is_valid_sector(value):
     return len(all_sector_stocks(value)) > 0
 
 
-class SectorSearchForm(forms.Form):
-    SECTOR_CHOICES = (
-        ("Class Pend", "Class Pend"),
-        ("Communication Services", "Communication Services"),
-        ("Consumer Discretionary", "Consumer Discretionary"),
-        ("Consumer Staples", "Consumer Staples"),
-        ("Energy", "Energy"),
-        ("Financials", "Financials"),
-        ("Health Care", "Health Care"),
-        ("Industrials", "Industrials"),
-        ("Information Technology", "Information Technology"),
-        ("Materials", "Materials"),
-        ("Metals & Mining", "Metals & Mining"),
-        ("Not Applic", "Not Applic"),
-        ("Real Estate", "Real Estate"),
-        ("Utilities", "Utilities"),
-    )
-    sector = forms.ChoiceField(
-        choices=SECTOR_CHOICES,
-        required=True,
-        validators=[is_not_blank, is_valid_sector],
-    )
-    report_top_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
-    report_bottom_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
-
-
 class DividendSearchForm(forms.Form):
     min_yield = forms.FloatField(required=False, min_value=0.0, initial=4.0)
     max_yield = forms.FloatField(
@@ -56,8 +30,32 @@ class DividendSearchForm(forms.Form):
 
 
 class CompanySearchForm(forms.Form):
+    SECTOR_CHOICES = (
+        ("Class Pend", "Class Pend"),
+        ("Communication Services", "Communication Services"),
+        ("Consumer Discretionary", "Consumer Discretionary"),
+        ("Consumer Staples", "Consumer Staples"),
+        ("Energy", "Energy"),
+        ("Financials", "Financials"),
+        ("Health Care", "Health Care"),
+        ("Industrials", "Industrials"),
+        ("Information Technology", "Information Technology"),
+        ("Materials", "Materials"),
+        ("Metals & Mining", "Metals & Mining"),
+        ("Not Applic", "Not Applic"),
+        ("Real Estate", "Real Estate"),
+        ("Utilities", "Utilities"),
+    )
+    sector_enabled = forms.BooleanField(label="", required=True, initial=False)
+    sector = forms.ChoiceField(
+        choices=SECTOR_CHOICES,
+        required=True,
+        validators=[is_not_blank, is_valid_sector],
+    )
     name = forms.CharField(required=False)
     activity = forms.CharField(required=False)
+    report_top_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
+    report_bottom_n = forms.IntegerField(required=False, min_value=10, max_value=2000)
 
 
 class MoverSearchForm(forms.Form):
@@ -95,7 +93,7 @@ class SectorSentimentSearchForm(forms.Form):
         (2, "Min/Max. scaling"),
         (3, "Divide by maximum"),
     )
-    sector = forms.ChoiceField(required=True, choices=SectorSearchForm.SECTOR_CHOICES)
+    sector = forms.ChoiceField(required=True, choices=CompanySearchForm.SECTOR_CHOICES)
     normalisation_method = forms.ChoiceField(
         required=True, choices=normalisation_choices
     )
@@ -153,6 +151,9 @@ class OptimisePortfolioForm(forms.Form):
         ),
         required=True,
     )
+    exclude_etfs = forms.BooleanField(
+        required=False, initial=False, label="exclude ETFs?"
+    )
 
     def __init__(self, excluded_stocks, **kwargs):
         super(OptimisePortfolioForm, self).__init__(**kwargs)
@@ -162,9 +163,9 @@ class OptimisePortfolioForm(forms.Form):
 
 class OptimiseSectorForm(OptimisePortfolioForm):
     sector = forms.ChoiceField(
-        choices=SectorSearchForm.SECTOR_CHOICES,
+        choices=CompanySearchForm.SECTOR_CHOICES,
         required=True,
-        initial=SectorSearchForm.SECTOR_CHOICES[0][0],
+        initial=CompanySearchForm.SECTOR_CHOICES[0][0],
     )
 
     def __init__(self, *args, **kwargs):

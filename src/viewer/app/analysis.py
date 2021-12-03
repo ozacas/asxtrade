@@ -415,7 +415,7 @@ def ef_risk_strategy(
 def ef_minvol_strategy(ld: LazyDictionary, returns=None, cov_matrix=None):
     ef = EfficientFrontier(returns, cov_matrix)
     ef.add_objective(objective_functions.L2_reg, gamma=0.1)
-    weights = ef.min_volatility()
+    # weights = ef.min_volatility()
     ld["optimizer"] = ef
     ld["raw_weights"] = lambda ld: ld["optimizer"].min_volatility()
 
@@ -490,13 +490,14 @@ def assign_strategy(ld: LazyDictionary, algo: str) -> tuple:
     # print(market_prices)
     ld["s"] = CovarianceShrinkage(ld["filtered_stocks"]).ledoit_wolf()
     ld["delta"] = market_implied_risk_aversion(ld["market_prices"])
+
     # use BlackLitterman model to compute returns - hopefully better estimate of returns than extrapolation of historical prices
     # market_prior = market_implied_prior_returns(ld["market_caps"], delta, ld["s"])
     ld["bl"] = lambda ld: BlackLittermanModel(
         ld["s"],
         pi="market",
         market_caps=ld["market_caps"],
-        risk_aversion=ld["delta"],
+        risk_aversion=abs(ld["delta"]),
         absolute_views={},
     )
     ld["posterior_total_returns"] = lambda ld: ld["bl"].bl_returns()

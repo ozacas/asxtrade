@@ -99,6 +99,10 @@ class OptimisedWatchlistView(LoginRequiredMixin, FormView):
                 exclude = exclude.split(",")
             stocks = set(stocks).difference(exclude)
 
+        if form.cleaned_data["exclude_etfs"]:
+            stocks = set(stocks).difference(all_etfs())
+            print(f"After excluding ETFs: {len(stocks)} stocks remain")
+
         self.timeframe = Timeframe(past_n_days=n_days)
         self.results = optimise_portfolio(
             stocks,
