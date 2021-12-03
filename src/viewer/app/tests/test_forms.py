@@ -6,7 +6,6 @@ from django.core.exceptions import ValidationError
 from app.forms import (
     is_not_blank,
     is_valid_sector,
-    SectorSearchForm,
     MoverSearchForm,
     DividendSearchForm,
     CompanySearchForm,
