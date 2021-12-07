@@ -11,6 +11,8 @@ lazydict
 matplotlib
 numpy
 pandas >= 1.1.0
+pandasdmx
+pymongo < 4.0
 wbdata
 plotnine >= 0.8.0
 pytest-django
