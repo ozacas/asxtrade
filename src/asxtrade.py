@@ -130,8 +130,11 @@ def validate_prices(dataframe):
 
     if isinstance(dataframe, str):  # TSV filename?
         dataframe = pd.read_csv(dataframe, sep="\t")
-    context = ge.data_context.DataContext()
-    print(context.get_available_data_asset_names())
+    try:
+        context = ge.DataContext()
+        print(context.get_available_data_asset_names())
+    except:
+        pass
     # context.
 
 
@@ -215,9 +218,10 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
             print(str(e))
         time.sleep(5)  # be nice to the API endpoint
     fname = "{}/asx_prices/prices.{}.tsv".format(config.get("data_root"), fetch_date)
-    df.to_csv(fname, sep="\t")
-    validate_prices(df)
-    print("Saved {} stock codes with prices to {}".format(len(df), fname))
+    if df is not None:
+        df.to_csv(fname, sep="\t")
+        validate_prices(df)
+        print("Saved {} stock codes with prices to {}".format(len(df), fname))
 
 
 def available_stocks(db, config):
