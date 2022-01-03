@@ -14,6 +14,7 @@ from pandas.core.base import NoNewAttributesMixin
 import plotnine as p9
 from lazydict import LazyDictionary
 from django.contrib.auth import get_user_model
+from mizani import transforms
 from app.models import (
     Timeframe,
     timing,
@@ -316,6 +317,8 @@ def plot_company_versus_sector(
     plot = p9.ggplot(
         df, p9.aes("date", "value", group="group", color="group", fill="group")
     ) + p9.geom_line(size=1.5)
+    if max(df['value']) - min(df['value']) > 100.0:
+        plot += p9.scale_y_log10(trans=transforms.pseudo_log_trans) # cant use log scale since negative values may be involved
     return user_theme(
         plot,
         y_axis_label="Change since start (%)",
