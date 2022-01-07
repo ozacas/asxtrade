@@ -46,10 +46,11 @@ class CompanySearchForm(forms.Form):
         ("Real Estate", "Real Estate"),
         ("Utilities", "Utilities"),
     )
-    sector_enabled = forms.BooleanField(label="", required=True, initial=False)
+    sector_enabled = forms.BooleanField(label="Match companies within chosen sectors?", required=False, initial=False)
     sector = forms.ChoiceField(
         choices=SECTOR_CHOICES,
-        required=True,
+        required=False,
+        initial=SECTOR_CHOICES[1][0],
         validators=[is_not_blank, is_valid_sector],
     )
     name = forms.CharField(required=False)

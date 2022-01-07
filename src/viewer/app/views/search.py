@@ -187,10 +187,9 @@ class CompanySearch(DividendYieldSearch):
         )  # default to Comms. Services if not specified'
         sector_id = ld.get("sector_id", None)
         return {
-            "title": "Find by company name or activity",
-            "sentiment_heatmap_title": "Heatmap for named companies",
+            "title": "Find by company details",
+            "sentiment_heatmap_title": "Heatmap for matching stocks",
             # to highlight top10/bottom10 bookmarks correctly
-            "title": "Find by company sector",
             "sector_name": sector,
             "sector_id": sector_id,
             "sentiment_heatmap_title": "{} sector sentiment".format(sector),
@@ -238,15 +237,16 @@ class CompanySearch(DividendYieldSearch):
 
         wanted_name = kwargs.get("name", "")
         wanted_activity = kwargs.get("activity", "")
-        matching_companies = find_named_companies(wanted_name, wanted_activity)
-
+        if len(wanted_name) > 0 or len(wanted_activity) > 0:
+           matching_companies = find_named_companies(wanted_name, wanted_activity)
+        else:
+           matching_companies = all_stocks()
+        print("Found {} companies matching: name={} or {}".format(len(matching_companies), wanted_name, wanted_activity))
         sector = kwargs.get("sector", self.DEFAULT_SECTOR)
         sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
         sector_stocks = all_sector_stocks(sector)
-        print(type(matching_companies))
-        print(type(sector_stocks))
-        wanted_stocks = matching_companies.union(sector_stocks)
-        print("Found {} matching stocks {}".format(len(wanted_stocks), sector))
+        wanted_stocks = matching_companies.difference(sector_stocks)
+        print("Accepted {} stocks matching sector={}".format(len(wanted_stocks), sector))
         report_top_n = kwargs.get("report_top_n", None)
         report_bottom_n = kwargs.get("report_bottom_n", None)
         self.timeframe = Timeframe(past_n_days=90)

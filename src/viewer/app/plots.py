@@ -317,6 +317,8 @@ def plot_company_versus_sector(
     plot = p9.ggplot(
         df, p9.aes("date", "value", group="group", color="group", fill="group")
     ) + p9.geom_line(size=1.5)
+    # if there are more than two orders of magnitude between best stock and this stock, use a log scale to improve comparability of performance
+    # a pseudo log transform is used to handle stocks which are losing money
     if max(df['value']) - min(df['value']) > 100.0:
         plot += p9.scale_y_log10(trans=transforms.pseudo_log_trans) # cant use log scale since negative values may be involved
     return user_theme(

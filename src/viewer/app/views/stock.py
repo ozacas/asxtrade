@@ -25,6 +25,7 @@ from app.models import (
     selected_cached_stocks_cip,
     timing,
     financial_metrics,
+    all_stock_fundamental_fields
 )
 from app.analysis import (
     default_point_score_rules,
@@ -216,19 +217,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
         df = company_prices(
             (stock,),
             momentum_timeframe,
-            fields=(
-                "eps",
-                "volume",
-                "last_price",
-                "annual_dividend_yield",
-                "pe",
-                "change_in_percent",
-                "change_price",
-                "market_cap",
-                "number_of_shares",
-                "day_low_price",
-                "day_high_price",
-            ),
+            fields=all_stock_fundamental_fields,
             missing_cb=None,
         )
         return df
@@ -251,6 +240,7 @@ def show_stock(request, stock=None, n_days=2 * 365):
     ld["stock_vs_sector_df"] = lambda ld: make_stock_vs_sector_dataframe(
         ld["cip_df"], stock, ld["sector_companies"]
     )
+    print(ld["stock_vs_sector_df"])
 
     momentum_plot = cache_plot(
         f"{plot_timeframe.description}-{stock}-rsi-plot",

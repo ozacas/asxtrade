@@ -9,6 +9,7 @@ from app.models import (
     cached_all_stocks_cip,
     Timeframe,
     stocks_by_sector,
+    company_prices,
     validate_user,
     user_watchlist,
     all_etfs,
@@ -16,6 +17,7 @@ from app.models import (
     Sector,
     validate_stock,
     financial_metrics,
+    all_stock_fundamental_fields
 )
 from app.data import make_kmeans_cluster_dataframe, make_pe_trends_eps_df, pe_trends_df
 
@@ -41,25 +43,33 @@ def save_dataframe_to_file(df, filename, output_format):
         raise ValueError("Unsupported format {}".format(output_format))
 
 
-def get_dataset(dataset_wanted, request):
+def get_dataset(dataset_wanted, request, timeframe=None):
     assert (
         dataset_wanted in set(["market_sentiment", "eps-per-sector"])
         or dataset_wanted.startswith("kmeans-")
         or dataset_wanted.startswith("financial-metrics-")
+        or dataset_wanted.startswith("stock-quotes-")
     )
 
+    if timeframe is None:
+        timeframe = Timeframe(past_n_days=300)
+
     if dataset_wanted == "market_sentiment":
-        df = cached_all_stocks_cip(Timeframe())
+        df = cached_all_stocks_cip(timeframe)
         return df
     elif dataset_wanted == "kmeans-watchlist":
-        timeframe = Timeframe(past_n_days=300)
         _, _, _, _, df = make_kmeans_cluster_dataframe(
             timeframe, 7, user_watchlist(request.user)
         )
         return df
     elif dataset_wanted == "kmeans-etfs":
-        timeframe = Timeframe(past_n_days=300)
         _, _, _, _, df = make_kmeans_cluster_dataframe(timeframe, 7, all_etfs())
+        return df
+    elif dataset_wanted.startswith("stock-quotes-"):
+        stock = dataset_wanted[len("stock-quotes-"):]
+        validate_stock(stock)
+        df = company_prices([stock], timeframe=timeframe, fields=all_stock_fundamental_fields, missing_cb=None)
+        df['stock_code'] = stock
         return df
     elif dataset_wanted.startswith("kmeans-sector-"):
         sector_id = int(dataset_wanted[14:])
@@ -67,7 +77,6 @@ def get_dataset(dataset_wanted, request):
         if sector is None or sector.sector_name is None:
             raise Http404("No stocks associated with sector")
         asx_codes = all_sector_stocks(sector.sector_name)
-        timeframe = Timeframe(past_n_days=300)
         _, _, _, _, df = make_kmeans_cluster_dataframe(timeframe, 7, asx_codes)
         return df
     elif dataset_wanted.startswith("financial-metrics-"):
@@ -94,7 +103,7 @@ def download_data(request, dataset=None, output_format="csv"):
     validate_user(request.user)
 
     with tempfile.NamedTemporaryFile() as fh:
-        df = get_dataset(dataset, request)
+        df = get_dataset(dataset, request, None)
         if df is None or len(df) < 1:
             raise Http404("No such dataset: {}".format(dataset))
         content_type = save_dataframe_to_file(df, fh.name, output_format)

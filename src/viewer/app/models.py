@@ -29,6 +29,20 @@ from django.http import Http404
 from cachetools import cached, LRUCache, LFUCache, keys, func
 
 
+all_stock_fundamental_fields = (
+                "eps",
+                "volume",
+                "last_price",
+                "annual_dividend_yield",
+                "pe",
+                "change_in_percent",
+                "change_price",
+                "market_cap",
+                "number_of_shares",
+                "day_low_price",
+                "day_high_price",
+            )
+
 def timing(f):
     @wraps(f)
     def wrap(*args, **kw):
@@ -999,7 +1013,7 @@ def company_prices(
     fields="last_price",
     missing_cb=impute_missing,  # or None if you want missing values
     transpose=False,  # return with stocks as columns (default) or rows?
-):
+) -> pd.DataFrame:
     """
     Return a dataframe with the required companies (iff quoted) over the
     specified dates. By default last_price is provided. Fields may be a list,
