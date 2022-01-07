@@ -166,7 +166,7 @@ if __name__ == "__main__":
     a.add_argument("--dbuser", **dict_args)
     a.add_argument("--dbpassword", help="MongoDB password for user", type=str, required=True)
     a.add_argument("--month", help="Month of year 1..12", required=True, type=int)
-    a.add_argument("--year", help="Year to load [2021]", default=2021, type=int)
+    a.add_argument("--year", help="Year to load [2022]", default=2022, type=int)
     a.add_argument("--status", help="Status of matrix eg. INCOMPLETE or FINAL", required=True, type=str)
     a.add_argument("--past365", help="Make past 365 days dataframe for speedier asxtrade.py [False]", action="store_true")
     a.add_argument('--compression', help="Compression to use [snappy]", choices=('gzip', 'lz4', 'snappy'), default='snappy')
