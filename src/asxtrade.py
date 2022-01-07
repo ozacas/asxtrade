@@ -138,7 +138,7 @@ def validate_prices(dataframe):
     # context.
 
 
-def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True):
+def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True, force=False, debug=False):
     assert isinstance(config, dict)
     # assert len(available_stocks) > 10 # dont do this anymore, since we might have to refetch a few failed stocks
 
@@ -161,7 +161,7 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
         already_fetched_doc = db.asx_prices.find_one(
             {"asx_code": asx_code, "fetch_date": fetch_date}
         )
-        if already_fetched_doc is not None:
+        if already_fetched_doc is not None and not force:
             print("Already got data for ASX {}".format(asx_code))
             continue
         try:
@@ -198,7 +198,8 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True)
             d["descr_full"] = d.pop(
                 "desc_full", None
             )  # rename to correspond to django model
-            # print(d)
+            if debug:
+                print(d)
             if df is None:
                 df = pd.DataFrame(columns=d.keys())
             row = pd.Series(d, name=asx_code)
@@ -410,6 +411,16 @@ if __name__ == "__main__":
         action="store_true",
     )
     args.add_argument(
+        "--force",
+        help="Re-fetch data even if already downloaded [false]",
+        action="store_true" 
+    )
+    args.add_argument(
+        "--debug",
+        help="Display downloaded record on stdout [false]",
+        action="store_true"
+    )
+    args.add_argument(
         "--date",
         help="Date to use as the record date in the database [YYYY-mm-dd]",
         type=str,
@@ -460,7 +471,7 @@ if __name__ == "__main__":
                 fetch_date = a.date
             else:
                 fetch_date = datetime.now().strftime("%Y-%m-%d")
-            update_prices(db, stocks_to_fetch, config, fetch_date, ensure_indexes=True)
+            update_prices(db, stocks_to_fetch, config, fetch_date, ensure_indexes=True, force=a.force, debug=a.debug)
         if a.want_details:
             print("**** UPDATING COMPANY DETAILS")
             update_company_details(db, stocks_to_fetch, config, ensure_indexes=True)
