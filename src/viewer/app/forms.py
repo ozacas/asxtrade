@@ -46,7 +46,7 @@ class CompanySearchForm(forms.Form):
         ("Real Estate", "Real Estate"),
         ("Utilities", "Utilities"),
     )
-    sector_enabled = forms.BooleanField(label="Match companies within chosen sectors?", required=False, initial=False)
+    sector_enabled = forms.BooleanField(label="Limit hits to chosen sector?", required=False, initial=False)
     sector = forms.ChoiceField(
         choices=SECTOR_CHOICES,
         required=False,
@@ -251,8 +251,8 @@ class MomentumSearchForm(forms.Form):
         label="Number of days to use for MA200",
     )
     what_to_search = forms.ChoiceField(
-        choices=(("all_stocks", "All stocks"), ("watchlist", "Watchlist")),
+        choices=(("all_stocks", "All stocks"), ("watchlist", "Watchlist"), *CompanySearchForm.SECTOR_CHOICES),
         label="Consider .. stocks only",
-        widget=forms.RadioSelect,
+        #widget=forms.RadioSelect,
         required=True,
     )

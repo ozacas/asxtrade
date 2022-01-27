@@ -25,6 +25,7 @@ from app.models import (
     Quotation,
     all_stocks,
     latest_quotation_date,
+    stocks_by_sector,
     user_watchlist,
     valid_quotes_only,
     latest_quote,
@@ -241,27 +242,31 @@ class CompanySearch(DividendYieldSearch):
            matching_companies = find_named_companies(wanted_name, wanted_activity)
         else:
            matching_companies = all_stocks()
-        print("Found {} companies matching: name={} or {}".format(len(matching_companies), wanted_name, wanted_activity))
         sector = kwargs.get("sector", self.DEFAULT_SECTOR)
         sector_id = int(Sector.objects.get(sector_name=sector).sector_id)
         sector_stocks = all_sector_stocks(sector)
-        wanted_stocks = matching_companies.difference(sector_stocks)
-        print("Accepted {} stocks matching sector={}".format(len(wanted_stocks), sector))
+        if kwargs.get("sector_enabled", False):
+           matching_companies = matching_companies.intersection(sector_stocks)
+        print("Found {} companies matching: name={} or activity={}".format(len(matching_companies), wanted_name, wanted_activity))
+ 
         report_top_n = kwargs.get("report_top_n", None)
         report_bottom_n = kwargs.get("report_bottom_n", None)
         self.timeframe = Timeframe(past_n_days=90)
         ld = LazyDictionary()
         ld["sector"] = sector
         ld["sector_id"] = sector_id
-        ld["sector_companies"] = wanted_stocks
-        ld["cip_df"] = selected_cached_stocks_cip(wanted_stocks, self.timeframe)
+        ld["sector_companies"] = sector_stocks
+        if len(matching_companies) > 0:
+            ld["cip_df"] = selected_cached_stocks_cip(matching_companies, self.timeframe)
+        else:
+            ld["cip_df"] = pd.DataFrame()
         ld["sector_performance_df"] = lambda ld: make_sector_performance_dataframe(
             ld["cip_df"], ld["sector_companies"]
         )
         ld["sector_performance_plot"] = lambda ld: self.sector_performance(ld)
         self.ld = ld
         wanted_stocks = self.filter_top_bottom(
-            ld, wanted_stocks, report_top_n, report_bottom_n
+            ld, matching_companies, report_top_n, report_bottom_n
         )
 
         print("Requesting valid quotes for {} stocks".format(len(wanted_stocks)))
@@ -270,7 +275,7 @@ class CompanySearch(DividendYieldSearch):
         )
         ret = quotations_as_at.filter(asx_code__in=wanted_stocks)
         if len(ret) < len(wanted_stocks):
-            got = set([q.asx_code for q in self.qs.all()])
+            got = set([q.asx_code for q in self.qs.all()]) if self.qs else set()
             missing_stocks = wanted_stocks.difference(got)
             warning(
                 self.request,
@@ -457,11 +462,14 @@ class MomentumSearch(DividendYieldSearch):
         what_to_search = kwargs.get("what_to_search")
         period1 = kwargs.get("period1", 20)
         period2 = kwargs.get("period2", 200)
-        stocks_to_consider = (
-            all_stocks()
-            if what_to_search == "all_stocks"
-            else user_watchlist(self.request.user)
-        )
+        if what_to_search == "all_stocks":
+            stocks_to_consider = all_stocks()
+        elif what_to_search == "watchlist":
+            stocks_to_consider = user_watchlist(self.request.user)
+        else:
+            #print(what_to_search)
+            stocks_to_consider = all_sector_stocks(what_to_search)
+       
         matching_stocks = set()
         self.timeframe = Timeframe(past_n_days=n_days)
 
