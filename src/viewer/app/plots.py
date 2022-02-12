@@ -678,7 +678,9 @@ def plot_momentum(stock: str, timeframe: Timeframe, ld: LazyDictionary) -> plt.F
     (linema200,) = ax2.plot(timeline, ma200, color="red", lw=2, label="MA (200)")
     assert linema20 is not None
     assert linema200 is not None
-    ax2.set_ylim(ma20.min(), ma20.max())
+    ma20_min, ma20_max = (ma20.min(), ma20.max())
+    if ma20_min and ma20_max:
+        ax2.set_ylim(ma20_min, ma20_max)
 
     props = font_manager.FontProperties(size=10)
     leg = ax2.legend(loc="lower left", shadow=True, fancybox=True, prop=props)
