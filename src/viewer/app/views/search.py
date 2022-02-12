@@ -200,11 +200,11 @@ class CompanySearch(DividendYieldSearch):
 
     def sector_performance(self, ld: LazyDictionary) -> str:
         sector = ld.get("sector")
+        if len(ld['sector_performance_df']) < 1:
+            return None
         return cache_plot(
             f"{sector}-sector-performance",
-            lambda ld: plot_sector_performance(ld["sector_performance_df"], sector)
-            if ld["sector_performance_df"] is not None
-            else None,
+            lambda ld: plot_sector_performance(ld["sector_performance_df"], sector),
             datasets=ld,
             dont_cache=True,
         )
