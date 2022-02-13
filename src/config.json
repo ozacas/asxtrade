@@ -3,6 +3,7 @@
    "asx_isin": "https://www2.asx.com.au/content/dam/asx/issuers/ISIN.xls",
    "asx_prices": "https://www.asx.com.au/asx/1/share/",
    "asx_company_details": "https://www.asx.com.au/asx/1/company/%s?fields=primary_share,latest_annual_reports,last_dividend,primary_share.indices",
+   "asx_investment_products_template_url": "https://www2.asx.com.au/content/dam/asx/issuers/asx-investment-products-reports/2022/excel/asx-investment-products-{month_abbrev}-{year}-abs.xlsx",
    "data_root": "data",
    "exclude_stocks_without_details": 0,
    "exclude_zero_volume_stocks": 0,
