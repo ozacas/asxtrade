@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+from builtins import exit, float, int, isinstance, len, list, print, range, set, str
 import argparse
 import io
 import os
@@ -34,7 +35,7 @@ def clean_value(value):
     value = value.replace(',', '')
     return float(value)
 
-def load_prices(db, field_name, month, year) -> pd.DataFrame:
+def load_field_dataframe(db, field_name, month, year) -> list:
     """
     Build a matrix of all available stocks with the given field_name eg. 'last_price'. This
     is built into a pandas dataframe and returned. NaN's may be returned where the stock has no quotation at a given date.
@@ -54,14 +55,8 @@ def load_prices(db, field_name, month, year) -> pd.DataFrame:
                                             },
                                             {'asx_code': 1, field_name: 1, 'fetch_date': 1})
            ]
-    if len(rows) == 0:
-        df = pd.DataFrame(columns=['fetch_date', 'asx_code', field_name]) # return dummy dataframe if empty
-        return df, rows
-        # FALLTHRU
-    df = pd.DataFrame.from_records(rows)
-    df = df.pivot(index='fetch_date', columns='asx_code', values='field_value')
-    #print(df)
-    return df, rows
+   
+    return rows
 
 def save_dataframe(db, df, tag, field_name, n_days=None, n_stocks=None, **kwargs):
     assert isinstance(df, pd.DataFrame) and len(df) > 0
@@ -103,14 +98,31 @@ def save_dataframe(db, df, tag, field_name, n_days=None, n_stocks=None, **kwargs
         }}, upsert=True)
         print(f"{tag} == {size} bytes (sha256 hexdigest {sha256_hash})")
 
-def load_all_prices(db, month: int, year: int, required_fields, **kwargs):
+def load_all_fields(db, month: int, year: int, required_fields, **kwargs):
     assert len(required_fields) > 0
     db.market_quote_cache.create_index([('tag', pymongo.ASCENDING)], unique=True)
     uber_df = None
+    impute_fields = kwargs.get('impute_fields', set())
     market = kwargs.get('market', 'asx')
     for field_name in required_fields:
         print("Constructing matrix: {} {}-{}".format(field_name, month, year))
-        df, rows = load_prices(db, field_name, month, year)
+        rows = load_field_dataframe(db, field_name, month, year)
+        if len(rows) == 0:
+            continue
+        df = pd.DataFrame.from_records(rows)
+        df = df.pivot(index='fetch_date', columns='asx_code', values='field_value')
+        if field_name in impute_fields: # some fields will break the viewer if too many NaN
+            before = df.isnull().sum().sum()
+            print(f"Imputing {field_name} - before {before} missing values")
+            df = df.fillna(method='pad').fillna(method='backfill')
+            after = df.isnull().sum().sum()
+            print(f"After imputation {field_name} - now {after} missing values")
+        rows = []
+        for asx_code, series in df.iteritems():
+            for fetch_date, field_value in series.iteritems():
+                rows.append({ 'asx_code': asx_code, 'fetch_date': fetch_date, 'field_value': field_value, 'field_name': field_name})
+        #print(rows)
+        
         if uber_df is None:
             uber_df = pd.DataFrame.from_records(rows)
         else:
@@ -137,6 +149,7 @@ def load_all_prices(db, month: int, year: int, required_fields, **kwargs):
     print("% missing values: ", ((uber_df.isnull() | uber_df.isna()).sum() * 100 / uber_df.index.size).round(2))
     n_stocks = uber_df['asx_code'].nunique()
     n_days = uber_df['fetch_date'].nunique()
+    print(uber_df)
     save_dataframe(db, uber_df, uber_tag, 'uber', n_days=n_days, n_stocks=n_stocks, **kwargs)
 
 if __name__ == "__main__":
@@ -182,6 +195,10 @@ if __name__ == "__main__":
     required_fields = ['change_in_percent', 'last_price', 'change_price', \
                        'day_low_price', 'day_high_price', 'volume', 'eps', \
                        'pe', 'annual_dividend_yield', 'market_cap', 'number_of_shares']
-    load_all_prices(db, args.month, args.year, required_fields, market=args.market, status=args.status, compression=args.compression)
+
+    # NB: viewer can 404 if too much missing data. So we try to address this by forward-filling market_cap and
+    # number_of_shares. But it is incorrect mathematically. Remove if you dont like it ;-) TODO FIXME
+    impute_fields = set(['market_cap', 'number_of_shares'])    
+    load_all_fields(db, args.month, args.year, required_fields, market=args.market, status=args.status, compression=args.compression, impute_fields=impute_fields)
     print("Run completed successfully.")
     exit(0)
