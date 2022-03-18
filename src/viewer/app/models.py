@@ -565,7 +565,9 @@ def valid_quotes_only(ymd: str, sort_by=None, ensure_date_has_data=True) -> tupl
 
     # a date is considered not to have data if <1000 stocks (data currently being downloaded?)
     if ensure_date_has_data:
-        if results.count() < 1000:
+        n = results.count()
+        if n < 1000:
+            print(f"Not enough results to consider {ymd} valid - only {n}, trying day before")
             # decrease date by 1 and try again... (we cant increment because this might go into the future)
             dt = datetime.strptime(ymd, "%Y-%m-%d") - timedelta(days=1)
             return valid_quotes_only(
