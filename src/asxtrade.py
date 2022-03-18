@@ -149,8 +149,9 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True,
         )
 
     fetcher = get_fetcher()
-    df = None
+   
     print("Updating stock prices for {}".format(fetch_date))
+    rows = []
     for asx_code in available_stocks:
         url = "{}{}{}".format(
             config.get("asx_prices"),
@@ -200,10 +201,8 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True,
             )  # rename to correspond to django model
             if debug:
                 print(d)
-            if df is None:
-                df = pd.DataFrame(columns=d.keys())
-            row = pd.Series(d, name=asx_code)
-            df = df.append(row)
+            assert isinstance(d, dict)
+            rows.append(d)
             assert (
                 "descr_full" in d
             )  # renamed in django app so we must do the same here...
@@ -219,7 +218,8 @@ def update_prices(db, available_stocks, config, fetch_date, ensure_indexes=True,
             print(str(e))
         time.sleep(5)  # be nice to the API endpoint
     fname = "{}/asx_prices/prices.{}.tsv".format(config.get("data_root"), fetch_date)
-    if df is not None:
+    if len(rows) > 0:
+        df = pd.DataFrame(rows, columns=rows[0].keys())
         df.to_csv(fname, sep="\t")
         validate_prices(df)
         print("Saved {} stock codes with prices to {}".format(len(df), fname))
