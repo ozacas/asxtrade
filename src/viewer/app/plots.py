@@ -405,7 +405,7 @@ def plot_series(
     plot = p9.ggplot(df, p9.aes(**args))
     if use_smooth_line:
         plot += p9.geom_smooth(
-            size=line_size, span=0.3, se=False
+            size=line_size, span=0.2, se=False
         )  # plotnine doesnt support confidence intervals with Loess smoothings, so se=False
     else:
         plot += p9.geom_line(size=line_size)
