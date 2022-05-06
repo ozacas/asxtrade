@@ -15,7 +15,7 @@ from bson.objectid import ObjectId
 
 
 def melt_dataframes(dfs: tuple) -> pd.DataFrame:
-    result = None
+    result = []
     for df in filter(lambda df: df is not None and len(df) > 0, dfs):
         df["metric"] = df.index
         melted = pd.melt(df, id_vars=("metric"), var_name="date")
@@ -24,17 +24,15 @@ def melt_dataframes(dfs: tuple) -> pd.DataFrame:
             continue
         # print(melted)
         # print(melted.shape)
-        if result is None:
-            result = melted
-        else:
-            result = result.append(melted)
-    if result is not None and "date" in result.columns:
-        # print(result)
-        result["date"] = pd.to_datetime(
-            result["date"], infer_datetime_format=True
+        assert isinstance(melted, pd.DataFrame)
+        result.append(melted)
+    final_df = pd.concat(result)
+    #print(final_df)
+    if len(final_df) > 0 and "date" in final_df.columns:
+        final_df["date"] = pd.to_datetime(
+            final_df["date"], infer_datetime_format=True
         )  # format="%Y-%m-%d")
-    # print(result)
-    return result
+    return final_df
 
 
 def desired_stocks():
