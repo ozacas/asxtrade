@@ -1215,6 +1215,7 @@ def financial_metrics(stock: str) -> pd.DataFrame:
     qs = CompanyFinancialMetric.objects.filter(asx_code=stock)
     rows = []
     for metric in qs:
+        print(f"{stock} {metric.as_at} {metric.name}={metric.value}")
         rows.append(
             {
                 "date": metric.as_at,
@@ -1226,5 +1227,5 @@ def financial_metrics(stock: str) -> pd.DataFrame:
     if len(df) < 1:
         return None
     ret = df.pivot(index="metric", columns="date", values="value")
-    # print(ret)
+    #print(ret)
     return ret

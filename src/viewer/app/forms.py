@@ -212,6 +212,12 @@ class FinancialMetricSearchForm(forms.Form):
         initial="%",
         label="interpreting value as... ",
     )
+    what_to_search = forms.ChoiceField(
+        choices=(("all_stocks", "All stocks"), ("watchlist", "Watchlist"), *CompanySearchForm.SECTOR_CHOICES),
+        label="Consider .. stocks only",
+        #widget=forms.RadioSelect,
+        required=True,
+    )
 
     def __init__(self, *args, **kwargs):
         metric_choices = [

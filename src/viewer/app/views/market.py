@@ -65,6 +65,7 @@ def make_quote_df(quotes, asx_codes: Iterable[str], prefix: str):
         columns=["market_cap", "last_price", "shares"],
     )
     if len(df) == 0:
+        print(quotes)
         raise Http404(f"No data present in {len(quotes)} quotes.")
     df["bin"] = df.apply(bin_market_cap, axis=1)
     df["market"] = prefix
@@ -84,10 +85,15 @@ def market_sentiment(request, n_days=21, n_top_bottom=20, sector_n_days=365):
         result_df = None
         adjusted_dates = []
         for the_date in [dates[0], dates[-1], dates[-30], dates[-90]]:
+            print(f"Before valid_quotes_only for {the_date}")
             quotes, actual_trading_date = valid_quotes_only(
                 the_date, ensure_date_has_data=True
             )
+            print(f"After valid_quotes_only for {the_date}")
+            print(f"Before make quotes {actual_trading_date}")
+            print(len(quotes))
             df = make_quote_df(quotes, ld["asx_codes"], actual_trading_date)
+            print("After make_quote_df")
             result_df = df if result_df is None else result_df.append(df)
             if the_date != actual_trading_date:
                 adjusted_dates.append(the_date)

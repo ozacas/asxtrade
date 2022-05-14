@@ -839,7 +839,7 @@ def plot_sector_field(df: pd.DataFrame, field, n_col=3):
     # assert set(df.columns) == set(['sector', 'date', 'mean_pe', 'sum_pe', 'sum_eps', 'mean_eps', 'n_stocks'])
     n_unique_sectors = df["sector"].nunique()
     df = df.dropna(axis=0, subset=[field])
-    df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d")
+    df.loc[:,["date"]] = pd.to_datetime(df["date"], format="%Y-%m-%d")
     # print(df)
 
     plot = (

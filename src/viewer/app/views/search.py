@@ -46,6 +46,20 @@ from plotnine.layer import Layers
 from cachetools import LRUCache
 
 
+def filter_stocks_to_search(request, what_to_search: str) -> set:
+    assert request is not None
+    assert len(what_to_search) > 0
+
+    if what_to_search == "all_stocks":
+        stocks_to_consider = all_stocks()
+    elif what_to_search == "watchlist":
+        stocks_to_consider = user_watchlist(request.user)
+    else:
+        #print(what_to_search)
+        stocks_to_consider = all_sector_stocks(what_to_search)
+    return stocks_to_consider
+
+
 class DividendYieldSearch(
     SearchMixin,
     LoginRequiredMixin,
@@ -317,11 +331,15 @@ class FinancialMetricSearchView(SearchMixin, LoginRequiredMixin, FormView):
                 matching_records = matching_records.filter(
                     value__gte=wanted_value * mult
                 )
+            stocks_to_consider = filter_stocks_to_search(self.request, kwargs.get('what_to_search'))
+            matching_records = matching_records.filter(asx_code__in=stocks_to_consider)
             matching_stocks = set([m.asx_code for m in matching_records])
             # its possible that some stocks have been delisted at the latest date, despite the financials being a match.
             # They will be shown if the ASX data endpoint still returns data as at the latest quote date
         else:
             matching_stocks = Quotation.objects.none()
+
+      
         return matching_stocks  # will be assigned to self.object_list by superclass
 
     def render_to_response(self, context):
@@ -459,16 +477,10 @@ class MomentumSearch(DividendYieldSearch):
 
     def recalc_queryset(self, **kwargs):
         n_days = kwargs.get("n_days", 30)
-        what_to_search = kwargs.get("what_to_search")
+        stocks_to_consider = filter_stocks_to_search(self.request, kwargs.get("what_to_search"))
         period1 = kwargs.get("period1", 20)
         period2 = kwargs.get("period2", 200)
-        if what_to_search == "all_stocks":
-            stocks_to_consider = all_stocks()
-        elif what_to_search == "watchlist":
-            stocks_to_consider = user_watchlist(self.request.user)
-        else:
-            #print(what_to_search)
-            stocks_to_consider = all_sector_stocks(what_to_search)
+      
        
         matching_stocks = set()
         self.timeframe = Timeframe(past_n_days=n_days)

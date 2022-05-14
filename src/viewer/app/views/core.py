@@ -79,6 +79,7 @@ def plot_cumulative_returns(
     movers["fetch_date"] = pd.to_datetime(movers["fetch_date"], format="%Y-%m-%d")
 
     # need to have separate dataframe's for positive and negative stocks - otherwise plotnine plot will be wrong
+    #print(df)
     pos_df = df.agg([positive_sum])
     neg_df = df.agg([negative_sum])
     pos_df = pos_df.melt(value_vars=dates)
