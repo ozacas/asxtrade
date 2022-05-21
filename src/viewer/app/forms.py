@@ -199,9 +199,10 @@ class FinancialMetricSearchForm(forms.Form):
     RELATION_CHOICES = (
         ("<=", "Any value (over the years) less than or equal to"),
         (">=", "Any value (over the years) greater than or equal to"),
-        ("average <=", "Average (over the years) less than or equal to"),
+        ("average <=", "Average less than or equal to, over the years"),
+        ("average >=", "Average greater than or equal to, over the years"),
         ("min <=", "Minimum (over the years) less than or equal to"),
-        ("max <=", "Maxmimum (over the years) less than or equal to"),
+        ("max <=", "Maximum (over the years) less than or equal to"),
     )
     metric = forms.ChoiceField(choices=(), required=True, label="Find stocks with... ")
     amount = forms.FloatField(required=True, initial=10.0, label="and value ...")

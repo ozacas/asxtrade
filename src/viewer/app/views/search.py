@@ -337,9 +337,7 @@ class FinancialMetricSearchView(SearchMixin, LoginRequiredMixin, FormView):
             # its possible that some stocks have been delisted at the latest date, despite the financials being a match.
             # They will be shown if the ASX data endpoint still returns data as at the latest quote date
         else:
-            matching_stocks = Quotation.objects.none()
-
-      
+            matching_stocks = Quotation.objects.none()      
         return matching_stocks  # will be assigned to self.object_list by superclass
 
     def render_to_response(self, context):
