@@ -504,7 +504,7 @@ class MomentumSearch(DividendYieldSearch):
             )
             if len(matching_dates.intersection(wanted_dates)) > 0:
                 matching_stocks.add(s)
-        return matching_stocks
+        return list(matching_stocks)
 
 
 momentum_change_search = MomentumSearch.as_view()
