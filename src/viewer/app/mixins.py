@@ -1,6 +1,6 @@
 from app.models import Quotation, VirtualPurchase
 from bson.objectid import ObjectId
-
+import traceback
 
 class VirtualPurchaseMixin:
     """
@@ -36,7 +36,12 @@ class SearchMixin:
     def update_form(self, form_values):
         assert isinstance(form_values, dict)
         # apply the form settings to self.queryset (specific to a CBV - watch for subclass overrides)
-        self.object_list = self.get_queryset(**form_values)
+        try:
+            self.object_list = self.get_queryset(**form_values)
+        except Exception:
+            traceback.format_exc()
+            self.object_list = [] # defend against broken get_queryset() implementations
+
         state_field = (
             self.__class__.__name__
         )  # NB: must use class name so that each search type has its own state for a given user
@@ -50,6 +55,7 @@ class SearchMixin:
         return self.render_to_response(context)
 
     def form_invalid(self, form):
+        print(f"Invalid form data: {form.cleaned_data}")
         return self.update_form(form.cleaned_data)
 
     # this is called from self.post()
