@@ -527,7 +527,7 @@ def calc_ma_crossover_points(
     else:  # assume multiple points ie. MultiPoint
         ret = []
         # print(result)
-        for hit in list(result):
+        for hit in list(result.geoms):
             if isinstance(hit, Point):
                 nearest_idx = int(hit.x)
                 intersect_price = hit.y
