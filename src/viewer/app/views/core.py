@@ -139,7 +139,7 @@ def show_companies(
         # FALLTHRU
     else:
         # no companies to report?
-        warning(request, "No matching companies.")
+        warning(request, f"No matching companies matching: {matching_companies}")
         return render(
             request, template_name, context={"timeframe": sentiment_timeframe}
         )

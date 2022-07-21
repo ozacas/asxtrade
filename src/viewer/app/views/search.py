@@ -475,11 +475,12 @@ class MomentumSearch(DividendYieldSearch):
 
     def recalc_queryset(self, **kwargs):
         n_days = kwargs.get("n_days", 30)
-        stocks_to_consider = filter_stocks_to_search(self.request, kwargs.get("what_to_search"))
+        stocks_to_consider = filter_stocks_to_search(self.request, kwargs.get("what_to_search", "watchlist"))
+        if len(stocks_to_consider) < 1:
+            raise ValueError(f"No stocks to consider!")
         period1 = kwargs.get("period1", 20)
         period2 = kwargs.get("period2", 200)
       
-       
         matching_stocks = set()
         self.timeframe = Timeframe(past_n_days=n_days)
 
@@ -487,22 +488,36 @@ class MomentumSearch(DividendYieldSearch):
         df = company_prices(
             stocks_to_consider, Timeframe(past_n_days=n_days + period2), transpose=False
         )
-        # print(df)
+        print(df)
         wanted_dates = set(self.timeframe.all_dates())
         for s in filter(lambda asx_code: asx_code in df.columns, stocks_to_consider):
             last_price = df[s]
             # we filter now because it is after the warm-up period for MA200....
             ma20 = last_price.rolling(period1).mean().filter(items=wanted_dates, axis=0)
+            #print(ma20)
+            #ma20.index = pd.to_datetime(ma20.index, format="%Y-%m-%d")
+            #ma20 = ma20.sort_index()
+            #print(ma20)
+
             ma200 = (
                 last_price.rolling(period2, min_periods=min([50, 3 * period1]))
                 .mean()
                 .filter(items=wanted_dates, axis=0)
             )
+            #ma200.index = pd.to_datetime(ma200.index, format="%Y-%m-%d")
+            #ma200 = ma200.sort_index()
+            #print(ma200)
+            #print(ma20, "\n", ma200)
 
             matching_dates = set(
                 [xo[1] for xo in calc_ma_crossover_points(ma20, ma200)]
             )
-            if len(matching_dates.intersection(wanted_dates)) > 0:
+
+            #print(matching_dates)
+            #print(wanted_dates)
+            n_intersections = len(matching_dates.intersection(wanted_dates))
+            #print(f"{s} has length == {n_intersections}")
+            if n_intersections > 0:
                 matching_stocks.add(s)
         return list(matching_stocks)
 
