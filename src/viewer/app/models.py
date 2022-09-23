@@ -480,7 +480,7 @@ def stock_info(stock: str, warning_cb=None) -> dict:
     return result
 
 
-@timing
+#@timing
 @func.ttl_cache(maxsize=1)
 def stocks_by_sector() -> pd.DataFrame:
     rows = [d for d in CompanyDetails.objects.values("asx_code", "sector_name")]
@@ -809,7 +809,7 @@ def latest_quote(stocks):
         return (qs, latest_date)
 
 
-@timing
+#@timing
 def selected_cached_stocks_cip(stocks, timeframe: Timeframe) -> pd.DataFrame:
     n = len(stocks)
     assert n > 0
