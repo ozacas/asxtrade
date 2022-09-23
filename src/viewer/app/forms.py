@@ -1,7 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from app.models import CompanyFinancialMetric, all_sector_stocks
-
+import traceback
 
 def is_not_blank(value):
     if value is None or len(value) < 1 or len(value.strip()) < 1:
@@ -183,7 +183,11 @@ class MarketCapSearchForm(forms.Form):
     max_cap = forms.IntegerField(
         min_value=0, initial=100, label="Maximum market cap ($AUD millions)"
     )
-
+    report_only = forms.ChoiceField(choices=(( 'Market cap range', 'with range above'),
+                                             ('ASX top 20', 'ASX top 20'), 
+                                             ('ASX top 50', 'ASX top 50'),
+                                             ('ASX top 100', 'ASX top 100'),
+                                             ('ASX top 200', 'ASX top 200')), label='Report only stocks... ')
 
 class FinancialMetricSearchForm(forms.Form):
     """
@@ -263,3 +267,7 @@ class MomentumSearchForm(forms.Form):
         #widget=forms.RadioSelect,
         required=True,
     )
+
+    #def __init__(self, *args, **kwargs):
+    #   print(traceback.print_stack()) 
+    #   return super().__init__(*args, **kwargs)

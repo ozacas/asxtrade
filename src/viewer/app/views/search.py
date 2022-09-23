@@ -2,6 +2,7 @@
 Responsible for implementing user search for finding companies of interest
 """
 from collections import defaultdict
+import traceback
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic.list import MultipleObjectTemplateResponseMixin
 from django.views.generic.edit import FormView
@@ -376,20 +377,35 @@ class MarketCapSearch(MoverSearch):
     def recalc_queryset(self, **kwargs):
         # identify all stocks which have a market cap which satisfies the required constraints
         quotes_qs, most_recent_date = latest_quote(None)
-        min_cap = kwargs.get("min_cap", 1)
-        max_cap = kwargs.get("max_cap", 1000)
-        quotes_qs = (
-            quotes_qs.exclude(market_cap__lt=min_cap * 1000 * 1000)
-            .exclude(market_cap__isnull=True)
-            .exclude(market_cap__gt=max_cap * 1000 * 1000)
-            .exclude(suspended__isnull=True)
-        )
-        info(
-            self.request,
-            "Found {} quotes, as at {}, satisfying market cap criteria".format(
-                quotes_qs.count(), most_recent_date
-            ),
-        )
+        search_type = kwargs.get('report_only', 'Market cap range')
+        quotes_qs = ( quotes_qs.exclude(market_cap__isnull=True)
+                               .exclude(suspended__isnull=True) )
+
+        print(f"Performing market cap search: {search_type}")
+        if search_type == 'Market cap range':
+            min_cap = kwargs.get("min_cap", 1)
+            max_cap = kwargs.get("max_cap", 1000)
+            quotes_qs = (
+                quotes_qs.exclude(market_cap__lt=min_cap * 1000 * 1000)
+                .exclude(market_cap__gt=max_cap * 1000 * 1000)
+            )
+        else:
+            if search_type.endswith('20'):
+                n = 20
+            elif search_type.endswith('50'):
+                n = 50
+            elif search_type.endswith('100'):
+                n = 100
+            else:
+                n = 200
+            quotes_qs = quotes_qs.order_by('-market_cap')
+            # we cant slice since this breaks downstream processing, so we must clone queryset and process that
+            wanted_codes = set([i.asx_code for i in quotes_qs.all()[:n]])
+            quotes_qs = quotes_qs.filter(asx_code__in=wanted_codes)
+
+        msg = f"Found {quotes_qs.count()} market cap quotes, as at {most_recent_date}, satisfying market cap criteria"
+        print(msg)
+        info(self.request,  msg)
         return quotes_qs
 
 
@@ -488,7 +504,7 @@ class MomentumSearch(DividendYieldSearch):
         df = company_prices(
             stocks_to_consider, Timeframe(past_n_days=n_days + period2), transpose=False
         )
-        print(df)
+        #print(df)
         wanted_dates = set(self.timeframe.all_dates())
         for s in filter(lambda asx_code: asx_code in df.columns, stocks_to_consider):
             last_price = df[s]
