@@ -45,7 +45,7 @@ check_hash_collision_dict: dict = {}
 exclusive_lock = Lock()
 
 
-@timing
+#@timing
 def cache_plot(
     key: str,
     plot_factory: Callable = None,
