@@ -118,8 +118,8 @@ def load_all_fields(db, month: int, year: int, required_fields, **kwargs):
             after = df.isnull().sum().sum()
             print(f"After imputation {field_name} - now {after} missing values")
         rows = []
-        for asx_code, series in df.iteritems():
-            for fetch_date, field_value in series.iteritems():
+        for asx_code, series in df.items():
+            for fetch_date, field_value in series.items():
                 rows.append({ 'asx_code': asx_code, 'fetch_date': fetch_date, 'field_value': field_value, 'field_name': field_name})
         #print(rows)
         
